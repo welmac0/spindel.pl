@@ -12,9 +12,11 @@ wheels/
 # SQLite database - lokalne dane deweloperskie, nie schema
 *.db
 *.db-journal
+backups/
 
 # Sekrety / config lokalny (np. przyszly SMTP dla weryfikacji maili)
 .env
+keys
 
 # Cache narzedzi
 .pytest_cache/

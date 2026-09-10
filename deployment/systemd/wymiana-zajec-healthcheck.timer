@@ -1,0 +1,18 @@
+# systemd timer metadata.
+[Unit]
+# Name shown in systemd status.
+Description=Run Wymiana Grup PW API health check every minute
+
+# Health check schedule.
+[Timer]
+# Run the first check one minute after the timer starts.
+OnBootSec=1min
+# Run again one minute after the previous activation.
+OnUnitActiveSec=1min
+# Unit activated by this timer.
+Unit=wymiana-zajec-healthcheck.service
+
+# Installation settings for a timer started with the system.
+[Install]
+# Start with the normal timers target.
+WantedBy=timers.target

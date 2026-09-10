@@ -22,6 +22,16 @@ class ListingStatus(str, Enum):
     pending = "pending"
     closed = "closed"
 
+class ExchangeStatus(str, Enum):
+    pending = "pending"
+    confirmed = "confirmed"
+    expired = "expired"
+
+class EmailDeliveryStatus(str, Enum):
+    pending = "pending"
+    sent = "sent"
+    failed = "failed"
+
 # Shared fields for Listing/Create/Public, so we don't repeat them
 # three times. Each of these models inherits from the same set,
 # so DB columns and API fields always stay in sync.
@@ -51,6 +61,7 @@ class ListingBase(SQLModel):
 
 class Listing(ListingBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    owner_id: int = Field(foreign_key="user.id", index=True)
 
     status: ListingStatus = ListingStatus.active
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -69,6 +80,7 @@ class ListingCreate(ListingBase):
 # is accepted - without changing the endpoints, just by editing this model.
 class ListingPublic(ListingBase):
     id: int
+    owner_id: int
     status: ListingStatus
     created_at: datetime
 
@@ -84,8 +96,6 @@ class ListingUpdate(SQLModel):
     group_have: Optional[str] = Field(default=None, min_length=1, max_length=50)
     group_want: Optional[str] = Field(default=None, min_length=1, max_length=50)
     description: Optional[str] = Field(default=None, max_length=1000)
-    status: Optional[ListingStatus] = None
-
     # Both fields are optional here, so we only check when the client
     # actually sent both groups at once - a PATCH of group_have alone
     # has nothing to compare against group_want.
@@ -117,17 +127,24 @@ class UserBase(SQLModel):
 class User(UserBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
 
+    password_hash: str
     email_verified: bool = False
-    # Verification token - None once the account is verified (one-time
-    # use, we don't keep it in the DB forever). index=True because we
-    # look it up in GET /verify.
-    verification_token: Optional[str] = Field(default=None, index=True)
+    # Only the hash is stored. The raw token exists only in the email link.
+    verification_token_hash: Optional[str] = Field(default=None, index=True)
+    verification_token_expires_at: Optional[datetime] = None
+    auth_token_hash: Optional[str] = Field(default=None, index=True)
+    auth_token_expires_at: Optional[datetime] = None
+    password_reset_token_hash: Optional[str] = Field(default=None, index=True)
+    password_reset_token_expires_at: Optional[datetime] = None
+    listing_cooldown_until: Optional[datetime] = None
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 # Request body for registration: email + index_number provided directly
 # by the user (index_number can't be derived from the email).
 class UserCreate(UserBase):
+    password: str = Field(min_length=8, max_length=128)
+
     @model_validator(mode="after")
     def validate_pw_email(self):
         if not PW_EMAIL_PATTERN.match(self.email):
@@ -147,3 +164,57 @@ class UserPublic(UserBase):
     index_number: str
     email_verified: bool
     created_at: datetime
+
+class UserLogin(SQLModel):
+    email: str
+    password: str
+
+class VerificationResend(SQLModel):
+    email: str
+
+class PasswordResetRequest(SQLModel):
+    email: str
+
+class PasswordResetConfirm(SQLModel):
+    token: str
+    password: str = Field(min_length=8, max_length=128)
+
+class AuthToken(SQLModel):
+    access_token: str
+    token_type: str = "bearer"
+
+class ExchangeRequest(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    listing_id: int = Field(foreign_key="listing.id", index=True)
+    requester_id: int = Field(foreign_key="user.id", index=True)
+    status: ExchangeStatus = ExchangeStatus.pending
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    expires_at: datetime
+    confirmed_at: Optional[datetime] = None
+
+class ExchangeRequestPublic(SQLModel):
+    id: int
+    listing_id: int
+    requester_id: int
+    status: ExchangeStatus
+    created_at: datetime
+    expires_at: datetime
+    confirmed_at: Optional[datetime]
+
+class EmailDelivery(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    recipient_email: str = Field(index=True, max_length=255)
+    email_type: str = Field(index=True, max_length=100)
+    status: EmailDeliveryStatus = EmailDeliveryStatus.pending
+    attempts: int = 0
+    last_error: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    sent_at: Optional[datetime] = None
+
+class EmailDeliveryAttempt(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    delivery_id: int = Field(foreign_key="emaildelivery.id", index=True)
+    attempt_number: int
+    status: EmailDeliveryStatus
+    error: Optional[str] = None
+    attempted_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

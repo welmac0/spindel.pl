@@ -10,6 +10,14 @@ requires-python = ">=3.13"
 dependencies = [
     "fastapi[standard]>=0.141.1",
     "sqlmodel>=0.0.39",
+    "sib-api-v3-sdk>=7.6.0",
+    "python-dotenv>=1.2.3",
+    "slowapi>=0.1.10",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
 ]
 
 [project.scripts]
