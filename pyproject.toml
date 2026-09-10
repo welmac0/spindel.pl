@@ -1,0 +1,20 @@
+[project]
+name = "wymiana-zajec"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Maciej Welpa", email = "mwq@kmd.dk" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi[standard]>=0.141.1",
+    "sqlmodel>=0.0.39",
+]
+
+[project.scripts]
+wymiana-zajec = "wymiana_zajec:main"
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"

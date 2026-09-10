@@ -1,0 +1,26 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# SQLite database - lokalne dane deweloperskie, nie schema
+*.db
+*.db-journal
+
+# Sekrety / config lokalny (np. przyszly SMTP dla weryfikacji maili)
+.env
+
+# Cache narzedzi
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# OS
+.DS_Store
+Thumbs.db
