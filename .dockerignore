@@ -1,0 +1,37 @@
+# Secrets and local configuration
+.env
+.env.*
+keys
+
+# Local databases and backups
+*.db
+*.db-journal
+backups/
+
+# Python environments and caches
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Git and local tooling
+.git/
+.gitignore
+.vscode/
+
+# Tests and documentation are not needed in the production image
+tests/
+docs/
+TODO.md
+pastebin
+
+# Existing build artifacts
+build/
+dist/
+*.egg-info/
+
+# Local Docker files not needed by the backend image
+docker/compose.yaml
+docker/Dockerfile.frontend
