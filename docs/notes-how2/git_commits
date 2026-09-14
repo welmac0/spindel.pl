@@ -1,0 +1,21 @@
+feat: nowa funkcja
+fix: poprawka błędu
+test: dodanie lub zmiana testów
+refactor: zmiana struktury bez zmiany zachowania
+docs: dokumentacja
+chore: konfiguracja, Docker, narzędzia
+style: formatowanie bez zmiany logiki
+perf: poprawa wydajności
+
+feat: add exchange management panel
+fix: prevent blank page in exchange panel
+fix: allow identical listings from different users
+test: cover exchange request lifecycle
+docs: document manual end-to-end testing
+chore: add Docker backend setup
+refactor: move backend into src package
+
+fix(auth): format validation errors
+feat(exchange): add request confirmation flow
+test(listings): cover duplicate listing protection
+docs(deployment): explain Docker startup

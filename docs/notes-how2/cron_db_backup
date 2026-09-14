@@ -1,0 +1,17 @@
+
+mkdir -p backups
+timestamp=$(date +"%Y%m%d-%H%M%S")
+sqlite3 database.db ".backup 'backups/database-$timestamp.db'"
+sha256sum database.db "backups/database-$timestamp.db"
+
+# cron/systemd timer -> backup SQLite
+backup=$(find backups -maxdepth 1 -name '*.db' -type f -printf '%T@ %p\n' |
+  sort -nr |
+  head -n 1 |
+  cut -d' ' -f2-)
+
+cp "$backup" backups/restore-test.db
+
+sqlite3 backups/restore-test.db "PRAGMA integrity_check;"
+
+rm backups/restore-test.db
