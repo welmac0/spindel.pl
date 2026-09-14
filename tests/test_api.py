@@ -5,15 +5,18 @@ from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from database import get_session
-import main
-from main import app
-from main import token_hash
-from models import (
+from wymiana_zajec.database import get_session
+import wymiana_zajec.main as main
+from wymiana_zajec.main import app
+from wymiana_zajec.main import token_hash
+from wymiana_zajec.models import (
     EmailDelivery,
     EmailDeliveryAttempt,
     EmailDeliveryStatus,
     ExchangeRequest,
+    ExchangeStatus,
+    Listing,
+    ListingStatus,
     User,
 )
 
@@ -37,7 +40,7 @@ def client(monkeypatch):
     monkeypatch.setattr(main, "send_exchange_request_email", lambda **kwargs: None)
     monkeypatch.setattr(main, "send_exchange_confirmed_email", lambda **kwargs: None)
     monkeypatch.setattr(main, "send_password_reset_email", lambda **kwargs: None)
-    with TestClient(app) as test_client:
+    with TestClient(app, base_url="http://localhost") as test_client:
         yield test_client, engine
     app.dependency_overrides.clear()
 
@@ -75,7 +78,7 @@ def listing_payload():
         "subject": "Algebra",
         "class_type": "tutorial",
         "group_have": "1",
-        "group_want": "2",
+        "group_want": ["2"],
         "description": "Zamiana grupy",
     }
 
@@ -85,6 +88,28 @@ def test_health_check(client):
     response = test_client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_old_active_listing_becomes_stale_and_fulfilled_stats_are_public(client):
+    test_client, engine = client
+    register_and_verify(test_client, engine, "12345678@pw.edu.pl", "123456")
+    owner_headers = login(test_client, "12345678@pw.edu.pl")
+    listing = test_client.post("/listings", json=listing_payload(), headers=owner_headers).json()
+
+    with Session(engine) as session:
+        stored = session.get(Listing, listing["id"])
+        stored.created_at = datetime.now(timezone.utc) - timedelta(days=91)
+        session.add(stored)
+        session.commit()
+
+    assert test_client.get("/listings").json() == []
+    with Session(engine) as session:
+        stored = session.get(Listing, listing["id"])
+        stored.status = ListingStatus.fulfilled
+        session.add(stored)
+        session.commit()
+
+    assert test_client.get("/stats").json() == {"fulfilled_exchanges": 1}
 
 
 def test_cors_allows_configured_development_origin(client):
@@ -125,6 +150,109 @@ def test_public_listing_requires_authenticated_owner(client):
     )
 
 
+def test_wanted_groups_are_sorted_deduplicated_and_stored_as_text(client):
+    test_client, engine = client
+    register_and_verify(test_client, engine, "12345678@pw.edu.pl", "123456")
+    owner_headers = login(test_client, "12345678@pw.edu.pl")
+    payload = listing_payload()
+    payload["group_want"] = ["15", "14", "15"]
+
+    response = test_client.post("/listings", json=payload, headers=owner_headers)
+    assert response.status_code == 200
+    assert response.json()["group_want"] == ["14", "15"]
+
+    with Session(engine) as session:
+        listing = session.exec(select(Listing)).one()
+        assert listing.group_want == "14,15"
+
+
+def test_inverse_active_listing_blocks_publication(client):
+    test_client, engine = client
+    register_and_verify(test_client, engine, "12345678@pw.edu.pl", "123456")
+    register_and_verify(test_client, engine, "87654321@pw.edu.pl", "654321")
+    first_headers = login(test_client, "12345678@pw.edu.pl")
+    second_headers = login(test_client, "87654321@pw.edu.pl")
+
+    first_payload = listing_payload()
+    first_payload["group_have"] = "14"
+    first_payload["group_want"] = ["12"]
+    first = test_client.post(
+        "/listings", json=first_payload, headers=first_headers
+    )
+    assert first.status_code == 200
+
+    inverse_payload = listing_payload()
+    inverse_payload["group_have"] = "12"
+    inverse_payload["group_want"] = ["14", "15"]
+    conflict = test_client.post(
+        "/listings", json=inverse_payload, headers=second_headers
+    )
+    assert conflict.status_code == 409
+    assert conflict.json()["detail"]["conflicting_listing_id"] == first.json()["id"]
+
+
+def test_identical_active_listing_blocks_flooding(client):
+    test_client, engine = client
+    register_and_verify(test_client, engine, "12345678@pw.edu.pl", "123456")
+    owner_headers = login(test_client, "12345678@pw.edu.pl")
+    first = test_client.post("/listings", json=listing_payload(), headers=owner_headers)
+    assert first.status_code == 200
+
+    duplicate = test_client.post(
+        "/listings", json=listing_payload(), headers=owner_headers
+    )
+    assert duplicate.status_code == 409
+    assert duplicate.json()["detail"]["conflicting_listing_id"] == first.json()["id"]
+
+
+def test_identical_listing_is_allowed_for_another_user(client):
+    test_client, engine = client
+    register_and_verify(test_client, engine, "12345678@pw.edu.pl", "123456")
+    register_and_verify(test_client, engine, "87654321@pw.edu.pl", "654321")
+    first_headers = login(test_client, "12345678@pw.edu.pl")
+    second_headers = login(test_client, "87654321@pw.edu.pl")
+
+    first = test_client.post("/listings", json=listing_payload(), headers=first_headers)
+    second = test_client.post("/listings", json=listing_payload(), headers=second_headers)
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["id"] != first.json()["id"]
+
+
+def test_verification_page_contains_login_link(client, monkeypatch):
+    test_client, engine = client
+    captured = {}
+
+    def capture_verification_email(**kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr(main, "send_verification_email", capture_verification_email)
+    response = test_client.post(
+        "/register",
+        json={
+            "email": "12345678@pw.edu.pl",
+            "index_number": "123456",
+            "password": "correct horse battery staple",
+        },
+    )
+    assert response.status_code == 201
+    verification = test_client.get("/verify", params={"token": captured["verification_token"]})
+    assert verification.status_code == 200
+    assert "Email potwierdzony" in verification.text
+    assert "http://localhost:5173" in verification.text
+
+
+def test_reset_password_link_redirects_to_frontend(client):
+    test_client, _ = client
+    response = test_client.get(
+        "/reset-password?token=example-token", follow_redirects=False
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        "http://localhost:5173/reset-password?token=example-token"
+    )
+
+
 def test_request_hides_listing_until_owner_confirms(client):
     test_client, engine = client
     register_and_verify(test_client, engine, "12345678@pw.edu.pl", "123456")
@@ -150,6 +278,66 @@ def test_request_hides_listing_until_owner_confirms(client):
     assert confirm.status_code == 200
     assert confirm.json()["status"] == "confirmed"
     assert test_client.get(f"/listings/{listing_id}").status_code == 404
+
+
+def test_exchange_panel_includes_listing_details_and_owner_role(client):
+    test_client, engine = client
+    register_and_verify(test_client, engine, "12345678@pw.edu.pl", "123456")
+    register_and_verify(test_client, engine, "87654321@pw.edu.pl", "654321")
+    owner_headers = login(test_client, "12345678@pw.edu.pl")
+    requester_headers = login(test_client, "87654321@pw.edu.pl")
+    listing = test_client.post("/listings", json=listing_payload(), headers=owner_headers).json()
+
+    request = test_client.post(
+        f"/listings/{listing['id']}/requests", headers=requester_headers
+    ).json()
+    requester_panel = test_client.get("/me/exchange-requests", headers=requester_headers)
+    owner_panel = test_client.get("/me/exchange-requests", headers=owner_headers)
+
+    requester_entry = requester_panel.json()[0]
+    owner_entry = owner_panel.json()[0]
+    assert requester_entry["id"] == request["id"]
+    assert requester_entry["is_owner"] is False
+    assert requester_entry["listing"]["subject"] == "Algebra"
+    assert owner_entry["is_owner"] is True
+    assert requester_entry["requester_email"] is None
+    assert requester_entry["owner_email"] is None
+
+
+def test_user_listings_are_private_and_include_non_active_history(client):
+    test_client, engine = client
+    register_and_verify(test_client, engine, "12345678@pw.edu.pl", "123456")
+    register_and_verify(test_client, engine, "87654321@pw.edu.pl", "654321")
+    owner_headers = login(test_client, "12345678@pw.edu.pl")
+    other_headers = login(test_client, "87654321@pw.edu.pl")
+    listing = test_client.post("/listings", json=listing_payload(), headers=owner_headers).json()
+
+    own = test_client.get("/me/listings", headers=owner_headers)
+    other = test_client.get("/me/listings", headers=other_headers)
+    assert own.status_code == 200
+    assert [item["id"] for item in own.json()] == [listing["id"]]
+    assert other.json() == []
+
+
+def test_cancelling_pending_listing_cancels_pending_request(client):
+    test_client, engine = client
+    register_and_verify(test_client, engine, "12345678@pw.edu.pl", "123456")
+    register_and_verify(test_client, engine, "87654321@pw.edu.pl", "654321")
+    owner_headers = login(test_client, "12345678@pw.edu.pl")
+    requester_headers = login(test_client, "87654321@pw.edu.pl")
+    listing = test_client.post("/listings", json=listing_payload(), headers=owner_headers).json()
+    request = test_client.post(
+        f"/listings/{listing['id']}/requests", headers=requester_headers
+    ).json()
+
+    cancelled = test_client.post(
+        f"/listings/{listing['id']}/cancel", headers=owner_headers
+    )
+    assert cancelled.status_code == 200
+    assert cancelled.json()["status"] == "cancelled"
+    with Session(engine) as session:
+        stored_request = session.get(ExchangeRequest, request["id"])
+        assert stored_request.status == ExchangeStatus.cancelled
 
 
 def test_expired_request_reactivates_listing_and_blocks_owner(client):

@@ -1,7 +1,7 @@
 import pytest
 
-import email_service
-from email_service import EmailDeliveryError, EmailSettings, send_verification_email
+import wymiana_zajec.email_service as email_service
+from wymiana_zajec.email_service import EmailDeliveryError, EmailSettings, send_verification_email
 
 
 def test_verification_email_contains_encoded_link(monkeypatch):
