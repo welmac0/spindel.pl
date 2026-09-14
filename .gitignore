@@ -23,6 +23,11 @@ keys
 .mypy_cache/
 .ruff_cache/
 
+# Frontend dependencies and build artifacts
+frontend/node_modules/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo
+
 # OS
 .DS_Store
 Thumbs.db

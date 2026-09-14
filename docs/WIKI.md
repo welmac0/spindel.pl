@@ -4,7 +4,7 @@
 
 Wymiana Grup PW to backend aplikacji, w ktorej student moze opublikowac ogloszenie o zamianie grupy zajeciowej. Inny zweryfikowany student moze zglosic zainteresowanie. Wymiana wymaga potwierdzenia przez wlasciciela ogloszenia.
 
-Frontend nie jest jeszcze zaimplementowany. Obecnym interfejsem developerskim jest REST API FastAPI i Swagger pod `/docs`.
+Frontend jest zaimplementowany jako React/Vite. W trybie developerskim korzysta z proxy `/api` do backendu FastAPI.
 
 ## 2. Stan obecny
 
@@ -31,12 +31,15 @@ Zaimplementowane:
 - Rate limiting wraz z `slowapi`.
 - Logowanie aplikacji przez standardowy logger na stdout.
 - Endpoint `GET /health` sprawdzajacy dostep do bazy.
-- 12 testow automatycznych.
+- Frontend React/Vite: logowanie, rejestracja, listingi, filtry, tworzenie ogloszen i panel wymian.
+- Trwala sesja frontendu przez `localStorage` do czasu wylogowania albo wygasniecia tokenu.
+- Frontendowe formularze resetu hasla i ponowienia weryfikacji emaila.
+- 25 testow automatycznych.
 
 Niezaimplementowane:
 
-- Frontend.
 - HTTPS i deployment produkcyjny.
+- Dockerfile frontendu i Nginx dla pelnego deploymentu frontend + backend.
 - Wspoldzielony storage rate limitingu, np. Redis.
 - Migracje schematu bazy danych.
 - Kolejka asynchronicznej wysylki maili.
@@ -75,6 +78,26 @@ API:
 
 - Swagger: `http://127.0.0.1:8000/docs`
 - OpenAPI JSON: `http://127.0.0.1:8000/openapi.json`
+
+Frontend developerski uruchamiaj osobno:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Frontend jest wtedy dostepny pod `http://localhost:5173`, a Vite przekazuje `/api` do backendu na porcie 8000.
+
+Backend przez Docker:
+
+```powershell
+docker compose -f docker/compose.yaml up --build
+```
+
+Compose uruchamia backend na `http://localhost:8000` i przechowuje SQLite w wolumenie `wymiana_data`. Obecny `Dockerfile.frontend` jest jeszcze pusty, wiec frontend nie jest obecnie czescia Compose.
+
+Nie uzywaj `docker compose down -v`, jezeli chcesz zachowac baze w wolumenie.
 
 Konfiguracja maili korzysta ze zmiennych srodowiskowych `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME` i `APP_BASE_URL`. Nie umieszczaj ich wartosci w dokumentacji, issue ani commitach.
 
@@ -153,13 +176,15 @@ Token jest jednorazowy. Po zmianie hasla obecny Bearer zostaje uniewazniony. Lim
 
 Wymaga Bearer. Tworzy ogloszenie nalezace do zalogowanego uzytkownika. Nie mozna tworzyc ogloszen w czasie 4-dniowego cooldownu.
 
+`group_have` jest pojedyncza grupa, a `group_want` lista grup, np. `["14", "15"]`. Backend usuwa duplikaty i sortuje liste. W SQLite lista jest przechowywana jako tekst `"14,15"`. Jesli istnieje aktywne ogloszenie dla odwrotnej zamiany, odpowiedz to `409` z `conflicting_listing_id`.
+
 #### `GET /listings`
 
 Publiczne. Zwraca tylko ogloszenia ze statusem `active`. Obslugiwane parametry: `limit` 1-100 i `offset` od 0.
 
 #### `GET /listings/{listing_id}`
 
-Publiczne. Ogloszenia `pending` i `closed` sa niewidoczne i zwracaja `404`.
+Publiczne. Ogloszenia `pending`, `fulfilled`, `stale` i `cancelled` sa niewidoczne i zwracaja `404`.
 
 #### `PATCH /listings/{listing_id}`
 
@@ -170,6 +195,14 @@ Wymaga Bearer wlasciciela. Statusu nie mozna zmienic przez PATCH. Grupy `group_h
 Wymaga Bearer wlasciciela. Zwraca `204`.
 
 ### Wymiana
+
+#### Ustalony UX panelu wymian
+
+Po zalogowaniu w naglowku pojawia sie przycisk `Moje wymiany`. Widok ma trzy logiczne sekcje: `Wyslane`, `Otrzymane` i `Zakonczone`.
+
+Wlasciciel ogloszenia widzi osobe zainteresowana oraz akcje `Potwierdz` i `Odrzuc`. Potwierdzenie wymaga dialogu z informacja, ze ogloszenie zostanie zamkniete. Po potwierdzeniu ogloszenie ma status `fulfilled`, obie osoby widza email drugiej osoby i obie dostaja email z krotkim opisem dopasowania.
+
+Odrzucenie nie tworzy statusu `rejected` dla ogloszenia. Pokazuje monit o anulowaniu, a po potwierdzeniu ogloszenie przechodzi na `cancelled`; nie wraca do `active`, bo oznacza to, ze szukana zamiana przestala byc aktualna. Wyslane zgloszenie nie ujawnia emaila wlasciciela przed potwierdzeniem.
 
 #### `POST /listings/{listing_id}/requests`
 
@@ -183,7 +216,19 @@ Wymaga Bearer wlasciciela ogloszenia.
 
 #### `POST /exchange-requests/{request_id}/confirm`
 
-Wymaga Bearer wlasciciela. Zmienia zgloszenie na `confirmed`, a ogloszenie na `closed`. Wysyla mail do osoby zglaszajacej.
+Wymaga Bearer wlasciciela. Zmienia zgloszenie na `confirmed`, a ogloszenie na `fulfilled`. Obie osoby dostaja mail z krotkim opisem dopasowania i emailem drugiej osoby; kontakty sa ujawniane dopiero po potwierdzeniu.
+
+#### `POST /exchange-requests/{request_id}/reject`
+
+Wymaga Bearer wlasciciela. Zgloszenie dostaje `cancelled`, a ogloszenie `cancelled`. Nie ma statusu ogloszenia `rejected`: odrzucenie oznacza, ze ogloszenie przestalo byc aktualne.
+
+#### `POST /listings/{listing_id}/cancel`
+
+Wymaga Bearer wlasciciela. Anuluje ogloszenie ze statusu `active` albo `pending`, zachowujac historie.
+
+#### `GET /me/exchange-requests`
+
+Wymaga Bearer. Zwraca wyslane przez uzytkownika zgloszenia oraz zgloszenia do jego ogloszen. Frontend pokazuje je jako `Wyslane`, `Otrzymane` i `Zakonczone`.
 
 ### Pozostale
 
@@ -195,6 +240,23 @@ Zwraca slownik kodow enumow i etykiet do wyswietlenia.
 
 Sprawdza, czy aplikacja dziala i czy sesja moze wykonac proste zapytanie do SQLite. Zwraca `{"status":"ok"}` albo `503` bez ujawniania szczegolow bledu.
 
+### Endpointy chronione
+
+Kazdy z ponizszych endpointow wymaga naglowka `Authorization: Bearer <token>` uzyskanego przez `POST /login`:
+
+- `POST /listings`
+- `PATCH /listings/{listing_id}`
+- `DELETE /listings/{listing_id}`
+- `POST /listings/{listing_id}/requests`
+- `GET /listings/{listing_id}/requests`
+- `POST /exchange-requests/{request_id}/confirm`
+- `POST /exchange-requests/{request_id}/reject`
+- `POST /listings/{listing_id}/cancel`
+- `GET /me/exchange-requests`
+- `GET /me/listings`
+
+W Swaggerze kliknij `Authorize`, wpisz `Bearer <access_token>` i dopiero wtedy wykonuj te operacje. Publiczne sa `GET /listings`, `GET /listings/{listing_id}`, `GET /enums`, `GET /health` oraz linkowe `GET /verify` i `GET /reset-password`.
+
 ## 6. Modele i statusy
 
 ### `User`
@@ -203,13 +265,15 @@ Przechowuje email, numer indeksu, hash hasla, status weryfikacji, hashe tokenow,
 
 ### `Listing`
 
-Ma wlasciciela, kierunek, semestr, przedmiot, typ zajec, grupe obecna, grupe docelowa, opis, status i date utworzenia.
+Ma wlasciciela, kierunek, semestr, przedmiot, typ zajec, grupe obecna, grupy docelowe, opis, status i date utworzenia. `group_want` jest lista w API, ale tekstem comma-separated w SQLite.
 
 Statusy:
 
 - `active` - widoczne i mozna sie zglosic.
 - `pending` - ktos sie zglosil; znika z listy.
-- `closed` - wymiana potwierdzona albo ogloszenie zamkniete.
+- `fulfilled` - wymiana potwierdzona i zakonczona sukcesem.
+- `stale` - aktywne ogloszenie starsze niz 90 dni.
+- `cancelled` - ogloszenie anulowane przez wlasciciela albo przez odrzucenie propozycji.
 
 ### `ExchangeRequest`
 
@@ -220,6 +284,7 @@ Statusy:
 - `pending`
 - `confirmed`
 - `expired`
+- `cancelled`
 
 ### Dostawy maili
 
@@ -254,6 +319,129 @@ Ograniczenia przed produkcja:
 ```powershell
 python -m uv run pytest -q
 ```
+
+## 9. Test manualny end-to-end
+
+### Przygotowanie
+
+Uruchom backend i frontend. Najwygodniej uzyj dwoch profili przegladarki albo okna zwyklego i incognito, aby utrzymac osobne sesje kont A i B.
+
+```powershell
+# terminal 1, backend lokalnie
+python -m uv run uvicorn wymiana_zajec.main:app --reload
+
+# terminal 2, frontend
+cd frontend
+npm run dev
+```
+
+Otworz `http://localhost:5173`. Swagger API jest pod `http://127.0.0.1:8000/docs`.
+
+W lokalnej bazie developerskiej moze istniec konto testowe B utworzone poza kodem. Nie wpisuj hasla testowego do repozytorium ani dokumentacji produkcyjnej.
+
+### A. Rejestracja i weryfikacja
+
+1. W profilu A wybierz `Zaloz konto`.
+2. Uzyj formatu emaila `12345678@pw.edu.pl`, szesciocyfrowego numeru indeksu i hasla o dlugosci co najmniej 8 znakow.
+3. Sprawdz, ze konto zostalo utworzone i pojawil sie komunikat o weryfikacji emaila.
+4. Przed weryfikacja sprobuj sie zalogowac. Oczekiwany rezultat: `403`, konto nie moze wejsc do aplikacji.
+5. Otworz link `/verify?token=...` z maila. Oczekiwany rezultat: `200`.
+6. Otworz ten sam link drugi raz. Oczekiwany rezultat: blad, bo token jest jednorazowy.
+7. Sprawdz link wygasly po 7 dniach w testach API albo przez przygotowanie rekordu w bazie. Oczekiwany rezultat: `410`.
+
+### B. Logowanie i trwala sesja
+
+1. Zaloguj konto A poprawnym haslem. Oczekiwany rezultat: pojawia sie przycisk `Moje wymiany` i `Dodaj ogloszenie`.
+2. Odswiez strone. Uzytkownik powinien nadal byc zalogowany, bo token jest zapisany w `localStorage`.
+3. Wyloguj sie. Oczekiwany rezultat: token znika z `localStorage`, przyciski konta wracaja do `Zaloguj` i `Zaloz konto`.
+4. Sprobuj zalogowac sie zlym haslem. Oczekiwany rezultat: `401`, bez utworzenia sesji.
+5. Sprobuj dostepu do chronionego endpointu bez Bearera. Oczekiwany rezultat: `401`.
+
+### C. Reset hasla i ponowienie weryfikacji
+
+1. W oknie logowania kliknij `Nie pamietam hasla` i wpisz email konta A.
+2. Oczekiwany rezultat: neutralny komunikat niezaleznie od tego, czy konto istnieje; API zwraca `202`.
+3. Otworz link resetu z maila i ustaw nowe haslo.
+4. Zaloguj sie nowym haslem. Stare haslo powinno odrzucic logowanie.
+5. Jesli konto jest niezweryfikowane, uzyj `Wyslij ponownie link weryfikacyjny`.
+6. Ponowienie przed wygasnieciem poprzedniego poprawnie wyslanego linku powinno zostac zablokowane przez `429`; po `failed` powinno byc mozliwe od razu.
+7. Uzyj tokenu resetu drugi raz albo po wygasnieciu. Oczekiwany rezultat: `400`.
+
+### D. Tworzenie i wyszukiwanie ogloszenia
+
+1. Konto A utworz ogloszenie, np. `Algebra`, semestr 3, grupa `1` -> grupy `2, 3`.
+2. Sprawdz, ze ogloszenie jest widoczne publicznie i ma poprawne grupy.
+3. Otworz filtry i sprawdz filtrowanie po kierunku, przedmiocie, semestrze, typie zajec, grupie posiadanej i grupie szukanej.
+4. Dodaj drugie ogloszenie z odwrotnym kierunkiem, np. `2` -> `1`. Oczekiwany rezultat: `409` z `conflicting_listing_id`.
+5. Sprobuj utworzyc ogloszenie z taka sama grupa w `group_have` i `group_want`. Oczekiwany rezultat: walidacja `422`.
+6. Sprobuj utworzyc ogloszenie bez Bearera. Oczekiwany rezultat: `401`.
+7. W panelu `Moje wymiany` sprawdz, ze ogloszenie jest widoczne w `Moje ogloszenia`.
+
+### E. Zgloszenie wymiany
+
+1. W profilu B znajdz aktywne ogloszenie konta A.
+2. Przed zalogowaniem kliknij zainteresowanie. Oczekiwany rezultat: komunikat o koniecznosci logowania.
+3. Po zalogowaniu kontem B kliknij `Zainteresuj sie wymiana`.
+4. Oczekiwany rezultat: ogloszenie przechodzi na `pending` i znika z publicznej listy.
+5. W profilu B otworz `Moje wymiany`: wpis jest w `Wyslane`.
+6. W profilu A otworz `Moje wymiany`: wpis jest w `Otrzymane`, z akcjami `Potwierdz` i `Odrzuc`.
+7. Przed potwierdzeniem sprawdz, ze email drugiej osoby nie jest widoczny.
+8. Sprobuj wyslac drugie zgloszenie do tego samego ogloszenia. Oczekiwany rezultat: `409` albo blokada wynikajaca ze statusu `pending`.
+9. Sprobuj zglosic sie do wlasnego ogloszenia. Oczekiwany rezultat: `400` albo `403` zgodnie z kontraktem endpointu.
+
+### F. Potwierdzenie wymiany
+
+1. W profilu A kliknij `Potwierdz`.
+2. Anuluj dialog. Oczekiwany rezultat: nic sie nie zmienia.
+3. Ponownie kliknij `Potwierdz` i zaakceptuj dialog.
+4. Oczekiwany rezultat: request ma status `confirmed`, listing ma status `fulfilled` i znika z publicznej listy.
+5. W obu profilach wpis pojawia sie w `Zakonczone`.
+6. Dopiero teraz oba profile widza email drugiej osoby.
+7. Sprawdz skrzynki: obie osoby powinny dostac krotki email o dopasowaniu z opisem przedmiotu i kontaktem.
+8. Sprobuj potwierdzic ten sam request drugi raz. Oczekiwany rezultat: `409`.
+
+### G. Odrzucenie i anulowanie
+
+1. Utworz nowe ogloszenie konta A i zglos sie na nie kontem B.
+2. W profilu A kliknij `Odrzuc` i anuluj dialog. Oczekiwany rezultat: brak zmian.
+3. Ponownie kliknij `Odrzuc` i zaakceptuj monit o anulowaniu.
+4. Oczekiwany rezultat: request ma `cancelled`, listing ma `cancelled`, a listing nie wraca do `active`.
+5. W profilu A anuluj osobne aktywne ogloszenie przez `Moje ogloszenia`.
+6. Oczekiwany rezultat: listing ma `cancelled` i znika z publicznej listy.
+7. Anuluj listing ze statusem `pending`. Powiazany oczekujacy request tez powinien miec `cancelled`.
+8. Sprobuj anulowac cudze ogloszenie. Oczekiwany rezultat: `403`.
+9. Sprobuj anulowac listing `fulfilled`, `stale` albo juz `cancelled`. Oczekiwany rezultat: `409`.
+
+### H. Wygasanie i nieaktualne ogloszenia
+
+1. W testach API ustaw `expires_at` requestu na czas przeszly.
+2. Wykonaj odczyt listy lub wywolaj endpoint wymiany.
+3. Oczekiwany rezultat: request ma `expired`, listing wraca do `active`, a wlasciciel dostaje cooldown 4 dni.
+4. W czasie cooldownu sprobuj utworzyc nowe ogloszenie. Oczekiwany rezultat: blokada.
+5. Ustaw `created_at` aktywnego ogloszenia starsze niz 90 dni i wywolaj odczyt listy.
+6. Oczekiwany rezultat: listing przechodzi na `stale` i nie jest publicznie widoczny.
+
+### I. Health, maile i dane
+
+1. Otworz `/health`. Oczekiwany rezultat: `{"status":"ok"}`.
+2. Sprawdz `GET /enums?lang=pl` i `GET /enums?lang=en`; etykiety powinny byc kompletne, w tym `cancelled`.
+3. Przy mockowanej wysylce uruchom testy automatyczne; nie wymagaja one prawdziwego Brevo.
+4. Przy realnej konfiguracji sprawdz, ze logi nie zawieraja hasel ani surowych tokenow.
+5. Sprawdz, ze reset hasla uniewaznia poprzedni Bearer.
+
+### J. Docker
+
+1. Upewnij sie, ze Docker Engine dziala.
+2. Uruchom `docker compose -f docker/compose.yaml up --build`.
+3. Sprawdz `http://localhost:8000/health` i `http://localhost:8000/docs`.
+4. Sprawdz `docker compose -f docker/compose.yaml ps`; backend powinien byc zdrowy.
+5. Utworz konto i listing przez API, zatrzymaj kontener `docker compose -f docker/compose.yaml down`, a nastepnie uruchom go ponownie.
+6. Sprawdz, ze dane przetrwaly, bo SQLite jest w wolumenie `wymiana_data`.
+7. Nie uzywaj `docker compose down -v`, chyba ze celowo chcesz wyzerowac baze.
+
+### Kryterium zaliczenia
+
+Test jest zaliczony, gdy publiczna lista pokazuje tylko aktualne `active`, kontakty sa ukryte przed `confirmed`, potwierdzenie i anulowanie sa atomowe, wygasanie przywraca listing zgodnie z cooldownem, sesja dziala po odswiezeniu, reset hasla jest jednorazowy, a dane przezywaja restart Compose.
 
 Testy uzywaja osobnej bazy SQLite in-memory i mockuja wysylke Brevo. Nie wysylaja prawdziwych maili. Testowany jest m.in. reset hasla, neutralnosc odpowiedzi, uniewaznienie Bearera, rate limiting, wygasanie tokenow, logi dostaw i blokada zgloszen do `pending`.
 

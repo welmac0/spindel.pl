@@ -39,6 +39,17 @@ Przykładowy wpis cron do skonfigurowania na serwerze:
 - [ ] Wykonac kontrolowany test niedostepnosci backendu.
 - [ ] Rozwazyc zewnetrzny monitoring, ktory zadziala takze po awarii calego serwera.
 
+### Docker monitor on the host
+
+- [ ] Skopiowac `scripts/check_health_inner.sh` do `/opt/wymiana-zajec/scripts/`.
+- [ ] Upewnic sie, ze Compose ma healthcheck `/health` dla uslugi `backend`.
+- [ ] Utworzyc `/etc/wymiana-zajec/wymiana-zajec-health.env` z `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME` i `ALERT_EMAIL`; ustawic `chmod 600`.
+- [ ] Utworzyc osobna usluge `wymiana-zajec-healthcheck-inner.service` z `ExecStart=/opt/wymiana-zajec/scripts/check_health_inner.sh` i `EnvironmentFile=/etc/wymiana-zajec/wymiana-zajec-health.env`.
+- [ ] Utworzyc timer `wymiana-zajec-healthcheck-inner.timer` uruchamiany co minute (`OnUnitActiveSec=1min`).
+- [ ] Wykonac `systemctl daemon-reload` oraz `systemctl enable --now wymiana-zajec-healthcheck-inner.timer`.
+- [ ] Sprawdzic wynik przez `systemctl status wymiana-zajec-healthcheck-inner.timer` i `journalctl -u wymiana-zajec-healthcheck-inner.service`.
+- [ ] Przetestowac awarie: zatrzymac backend, potwierdzic alert `down`, uruchomic backend i potwierdzic alert recovery.
+
 ## Docker storage
 
 - [ ] SQLite trzymac na trwalym volume/bind mouncie hosta (`data/`), nie w warstwie kontenera.

@@ -4,7 +4,7 @@ Ten dokument jest instrukcja startowa dla agenta pracujacego nad repozytorium `w
 
 ## Tozsamosc systemu
 
-To backend FastAPI dla wymiany grup zajeciowych studentow PW. Stack: Python 3.13+, FastAPI, SQLModel, SQLite, Brevo Transactional Email API, slowapi, uv. Frontend nie istnieje.
+To aplikacja FastAPI + React/Vite do wymiany grup zajeciowych studentow PW. Stack: Python 3.13+, FastAPI, SQLModel, SQLite, Brevo Transactional Email API, slowapi, uv, React, Vite i lucide-react.
 
 ## Zasady bezwzgledne
 
@@ -40,9 +40,17 @@ Reset hasla:
 - token wazny 1 godzine i jednorazowy,
 - zmiana hasla uniewaznia auth token.
 
+Frontend zapisuje Bearer w `localStorage` pod kluczem `spindel_access_token`, odtwarza sesje po odswiezeniu i usuwa token przy wylogowaniu. Formularze obsluguja reset hasla, ustawienie hasla z tokenu URL `/reset-password?token=...` oraz resend weryfikacji.
+
+### Panel wymian: decyzje UX
+
+Po zalogowaniu frontend ma pokazac przycisk `Moje wymiany` w naglowku. Panel dzieli dane na `Wyslane`, `Otrzymane` i `Zakonczone`. Wlasciciel moze `Potwierdz` albo `Odrzuc` otrzymane zgloszenie; potwierdzenie wymaga potwierdzajacego dialogu. Po potwierdzeniu listing przechodzi na `fulfilled`, oba emaile dostaja wiadomosc o dopasowaniu oraz email drugiej osoby. Kontakty nie sa ujawniane przed potwierdzeniem.
+
+Odrzucenie nie oznacza powrotu do `active`: uzytkownik, ktory odrzuca zainteresowanie, dostaje monit o anulowanie ogloszenia. Po akceptacji listing ma status `cancelled`. Nie dodajemy statusu `rejected` do statusow ogloszen, poniewaz stan biznesowy ma byc przechowywany na ogloszeniu i ma wspierac szybkie wyszukiwanie aktualnych ofert.
+
 ### Ogloszenie i wymiana
 
-Ogloszenia sa publiczne, ale tworzenie/edycja/usuwanie wymaga Bearera i wlasciciela. Tylko `active` jest widoczne. Zgloszenie wymaga zalogowania, nie moze byc do wlasnego ogloszenia i warunkowo przelacza `active -> pending`. Po 48 godzinach bez potwierdzenia zgloszenie wygasa, ogloszenie wraca do `active`, a wlasciciel dostaje cooldown 4 dni. Potwierdzenie zmienia zgloszenie na `confirmed` i ogloszenie na `closed`.
+Ogloszenia sa publiczne, ale tworzenie/edycja/usuwanie wymaga Bearera i wlasciciela. `group_have` to pojedyncza grupa, a `group_want` to lista grup w API; SQLite przechowuje ja jako posortowany tekst comma-separated. Tylko `active` jest widoczne. Zgloszenie wymaga zalogowania, nie moze byc do wlasnego ogloszenia i warunkowo przelacza `active -> pending`. Po 48 godzinach bez potwierdzenia zgloszenie wygasa, ogloszenie wraca do `active`, a wlasciciel dostaje cooldown 4 dni. Potwierdzenie zmienia zgloszenie na `confirmed` i ogloszenie na `fulfilled`. Odrzucenie oznacza `cancelled` dla zgloszenia i ogloszenia; nie dodajemy `rejected` do statusow ogloszen.
 
 ### Mail i awaria
 
@@ -62,8 +70,14 @@ Kazda logiczna wysylka ma `EmailDelivery`, a kazda proba `EmailDeliveryAttempt`.
 - `POST /listings/{id}/requests` - tylko zalogowany, tylko active.
 - `GET /listings/{id}/requests` - tylko wlasciciel.
 - `POST /exchange-requests/{id}/confirm` - tylko wlasciciel.
+- `POST /exchange-requests/{id}/reject` - wlasciciel anuluje ogloszenie po odrzuceniu.
+- `POST /listings/{id}/cancel` - wlasciciel anuluje ogloszenie.
+- `GET /me/exchange-requests` - panel wyslanych i otrzymanych zgloszen.
+- `GET /me/listings` - wszystkie ogloszenia zalogowanego wlasciciela, takze `pending`, `fulfilled`, `stale` i `cancelled`.
 - `GET /enums` - etykiety PL/EN.
 - `GET /health` - status aplikacji i bazy.
+
+Tworzenie ogloszenia zwraca `409` z `conflicting_listing_id`, jesli istnieje aktywne ogloszenie dla odwrotnej zamiany. Frontend pokazuje bledy operacji jako toast. Odpowiedz panelu wymian zawiera `listing` ze szczegolami oraz `is_owner`; kontakty sa niepuste dopiero dla `confirmed`.
 
 ## Bezpieczenstwo i ryzyka
 
@@ -71,13 +85,15 @@ Hashowanie hasel uzywa `scrypt`. Tokeny generuje `secrets`, a tokeny resetu i we
 
 `create_all()` nie wykonuje migracji istniejacych tabel. Zmiana modeli moze wymagac usuniecia lokalnego `database.db`; migracje sa celowo odlozone.
 
+Docker: `docker/compose.yaml` uruchamia obecnie tylko backend na porcie 8000. SQLite jest w nazwanym wolumenie `wymiana_data`, a `docker/Dockerfile.frontend` jest jeszcze pusty. Frontend uruchamia sie developersko osobno przez `npm run dev` na porcie 5173. Nie czytaj `.env`; Compose przekazuje je przez `env_file`.
+
 ## Walidacja po zmianach
 
 ```powershell
 python -m uv run pytest -q
 ```
 
-Testy nie lacza sie z Brevo: wysylka jest mockowana. Przy recznym tescie uzywaj Swaggera na `http://127.0.0.1:8000/docs`.
+Obecnie jest 25 testow backendowych. Testy nie lacza sie z Brevo: wysylka jest mockowana. Przy recznym tescie uzywaj scenariusza end-to-end w `docs/WIKI.md`, sekcja 9, oraz Swaggera na `http://127.0.0.1:8000/docs`. Chronione sa listingi mutujace, requesty wymian, panel `me` i anulowanie; publiczne sa odczyty aktywnych listingow, enumy, health oraz linki verify/reset.
 
 ## Decyzje wdrozeniowe
 
