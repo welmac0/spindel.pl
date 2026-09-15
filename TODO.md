@@ -1,5 +1,12 @@
 # TODO
 
+## Najblizszy etap
+
+- [x] Uruchomic pelny Compose lokalnie i potwierdzic status `healthy` backendu i frontendu.
+- [x] Wykonac smoke test przez frontend: logowanie, listing, wymiana i panel.
+- [X] Wykonac commit etapu frontend + Nginx + Compose.
+- [X] Przygotowac VPS Linux i wdrozenie stagingowe.
+
 ## Backup SQLite na serwerze Unix
 
 - [ ] Skonfigurować cron na serwerze, aby uruchamiał `scripts/backup_sqlite.sh` co 6 godzin.
@@ -18,7 +25,7 @@ Przykładowy wpis cron do skonfigurowania na serwerze:
 
 ## Backend jako usluga systemd
 
-- [ ] Utworzyc uzytkownika systemowego `wymiana`.
+- [x] Utworzyc uzytkownika systemowego `wymiana`.
 - [ ] Umiescic projekt w `/opt/wymiana-zajec`.
 - [ ] Utworzyc srodowisko uv w projekcie.
 - [ ] Umiescic sekrety w `/etc/wymiana-zajec/wymiana-zajec.env` z prawami tylko dla wlasciciela.
@@ -42,7 +49,7 @@ Przykładowy wpis cron do skonfigurowania na serwerze:
 ### Docker monitor on the host
 
 - [ ] Skopiowac `scripts/check_health_inner.sh` do `/opt/wymiana-zajec/scripts/`.
-- [ ] Upewnic sie, ze Compose ma healthcheck `/health` dla uslugi `backend`.
+- [x] Upewnic sie, ze Compose ma healthcheck `/health` dla uslugi `backend`.
 - [ ] Utworzyc `/etc/wymiana-zajec/wymiana-zajec-health.env` z `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME` i `ALERT_EMAIL`; ustawic `chmod 600`.
 - [ ] Utworzyc osobna usluge `wymiana-zajec-healthcheck-inner.service` z `ExecStart=/opt/wymiana-zajec/scripts/check_health_inner.sh` i `EnvironmentFile=/etc/wymiana-zajec/wymiana-zajec-health.env`.
 - [ ] Utworzyc timer `wymiana-zajec-healthcheck-inner.timer` uruchamiany co minute (`OnUnitActiveSec=1min`).
@@ -52,10 +59,34 @@ Przykładowy wpis cron do skonfigurowania na serwerze:
 
 ## Docker storage
 
-- [ ] SQLite trzymac na trwalym volume/bind mouncie hosta (`data/`), nie w warstwie kontenera.
+- [x] SQLite trzymac na trwalym named volume `wymiana_data`, nie w warstwie kontenera.
 - [ ] Backupy trzymac osobno na hoście (`backups/`); backend nie powinien miec do nich dostepu.
 - [ ] Backup wykonywac z hosta przez `sqlite3 .backup` i okresowo testowac odtworzenie.
 - [ ] Docelowo kopiowac backupy poza serwer (inny dysk, NAS albo object storage).
+
+## Docker Compose frontend + backend
+
+- [x] Zbudowac frontend wieloetapowo przez Node i Nginx.
+- [x] Skonfigurowac Nginx jako serwer SPA i proxy `/api` do uslugi `backend`.
+- [x] Dodac frontend do `docker/compose.yaml`.
+- [x] Dodac healthcheck frontendu sprawdzajacy Nginx przez HTTP.
+- [x] Dodac `depends_on` z warunkiem `service_healthy` dla backendu.
+- [ ] Ograniczyc publiczne wystawienie portu backendu na produkcji.
+
+## Bezpieczenstwo przed produkcja
+
+- [X] Uniewaznic ujawniony klucz Brevo i wygenerowac nowy klucz produkcyjny.
+- [X] Nie uruchamiac publicznie `docker compose config`, bo rozwija wartosci z `env_file`.
+- [ ] Wdrozyc HTTPS i przekierowanie HTTP -> HTTPS.
+- [ ] Dodac `Referrer-Policy: no-referrer` i usuwac tokeny verify/reset z adresu po ich odczytaniu.
+- [ ] Rozwazyc przeniesienie sesji z `localStorage` do ciasteczka `HttpOnly`, `Secure`, `SameSite`.
+- [ ] Dodac limity rate limitingu dla requestow wymian, anulowania i potwierdzania.
+- [ ] Dodac limity dlugosci loginu oraz liczby i rozmiaru elementow `group_want`.
+- [ ] Ujednolicic odpowiedzi rejestracji i resend, jezeli chcemy unikac enumeracji kont.
+- [ ] Dodac naglowki CSP, HSTS, `X-Content-Type-Options` i ochrone przed framingiem w Nginx.
+- [ ] Przypiac wersje zaleznosci frontendowych i obrazow Dockerowych zamiast `latest`.
+- [ ] Rozwazyc hardening kontenerow: `read_only`, `cap_drop`, limity CPU/RAM i minimalne `tmpfs`.
+- [ ] Poprawic JSON escaping w alertach Bash wysylanych przez Brevo.
 
 ## Infrastruktura: e-mail, hosting i domena
 

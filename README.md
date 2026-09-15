@@ -13,7 +13,8 @@ Backend aplikacji do wymiany grup zajeciowych dla studentow PW.
 - [x] Backup SQLite, checksum i health-check
 - [x] Docker backenda z trwalym storage dla SQLite
 - [x] Frontend developerski React/Vite
-- [ ] Nginx i HTTPS
+- [x] Frontend w Compose z Nginxem
+- [ ] HTTPS i deployment produkcyjny
 
 Pelna lista zadan znajduje sie w [TODO.md](TODO.md).
 
@@ -24,7 +25,7 @@ Wymagany jest Python 3.13+ oraz uv.
 ```powershell
 python -m uv sync
 python -m uv run pytest -q
-python -m uv run uvicorn main:app --reload
+python -m uv run uvicorn wymiana_zajec.main:app --reload
 ```
 
 Dokumentacja Swaggera jest dostepna pod `http://127.0.0.1:8000/docs`.
@@ -45,7 +46,7 @@ Backend mozna uruchomic przez Docker:
 docker compose -f docker/compose.yaml up --build
 ```
 
-Compose uruchamia backend na porcie 8000 i zapisuje SQLite w wolumenie `wymiana_data`. Frontend nie jest jeszcze zawarty w Compose; `docker/Dockerfile.frontend` pozostaje do uzupelnienia razem z Nginx.
+Compose uruchamia backend na porcie 8000, frontend przez Nginx na porcie 5175 i zapisuje SQLite w wolumenie `wymiana_data`.
 
 Testy manualne wszystkich mechanik sa opisane w [scenariuszu end-to-end](docs/WIKI.md#9-test-manualny-end-to-end).
 

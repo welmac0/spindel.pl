@@ -49,3 +49,5 @@ services:
 
 volumes:
   wymiana_data:
+    external: true
+    name: docker_wymiana_data

@@ -85,7 +85,7 @@ Hashowanie hasel uzywa `scrypt`. Tokeny generuje `secrets`, a tokeny resetu i we
 
 `create_all()` nie wykonuje migracji istniejacych tabel. Zmiana modeli moze wymagac usuniecia lokalnego `database.db`; migracje sa celowo odlozone.
 
-Docker: `docker/compose.yaml` uruchamia obecnie tylko backend na porcie 8000. SQLite jest w nazwanym wolumenie `wymiana_data`, a `docker/Dockerfile.frontend` jest jeszcze pusty. Frontend uruchamia sie developersko osobno przez `npm run dev` na porcie 5173. Nie czytaj `.env`; Compose przekazuje je przez `env_file`.
+Docker: `docker/compose.yaml` uruchamia backend na porcie 8000 i frontend przez Nginx na porcie 5175. `docker/Dockerfile.frontend` jest wieloetapowy: Node buduje `dist`, a Nginx go serwuje. `docker/nginx.conf` przekazuje `/api/...` do uslugi `backend` i obsluguje fallback SPA. SQLite jest w external volume `docker_wymiana_data`; oba serwisy maja healthcheck, a frontend zalezy od `backend` przez `service_healthy`. Nie czytaj `.env`; Compose przekazuje je przez `env_file`.
 
 ## Walidacja po zmianach
 
@@ -93,11 +93,11 @@ Docker: `docker/compose.yaml` uruchamia obecnie tylko backend na porcie 8000. SQ
 python -m uv run pytest -q
 ```
 
-Obecnie jest 25 testow backendowych. Testy nie lacza sie z Brevo: wysylka jest mockowana. Przy recznym tescie uzywaj scenariusza end-to-end w `docs/WIKI.md`, sekcja 9, oraz Swaggera na `http://127.0.0.1:8000/docs`. Chronione sa listingi mutujace, requesty wymian, panel `me` i anulowanie; publiczne sa odczyty aktywnych listingow, enumy, health oraz linki verify/reset.
+Obecnie jest 26 testow backendowych. Testy nie lacza sie z Brevo: wysylka jest mockowana. Przy recznym tescie uzywaj scenariusza end-to-end w `docs/WIKI.md`, sekcja 9, oraz Swaggera na `http://127.0.0.1:8000/docs`. Chronione sa listingi mutujace, requesty wymian, panel `me` i anulowanie; publiczne sa odczyty aktywnych listingow, enumy, health oraz linki verify/reset.
 
 ## Decyzje wdrozeniowe
 
-Na obecnym etapie aplikacja dziala jako jedna instancja. Nie dodawaj Redisa ani architektury klastrowej bez decyzji o skalowaniu. Docelowo frontend i backend beda osobnymi procesami za Nginxem, ale frontend jest odlozony do czasu domkniecia backendu.
+Na obecnym etapie aplikacja dziala jako jedna instancja Docker Compose na VPS-ie. Nie dodawaj Redisa ani architektury klastrowej bez decyzji o skalowaniu. Frontend jest serwowany przez Nginx, a Nginx przekazuje API do backendu.
 
 ## Preferowany sposob zmian
 

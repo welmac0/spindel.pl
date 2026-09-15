@@ -1,0 +1,40 @@
+// aktualizacja systemu
+apt update
+apt full-upgrade -y
+reboot
+
+// tworzenie usera
+adduser spindel // haslo ustaw lokalnie, nie zapisuj go w repozytorium
+
+// kopiowanie klucza
+install -d -m 700 -o spindel -g spindel /home/spindel/.ssh
+cp /root/.ssh/authorized_keys /home/spindel/.ssh/authorized_keys
+chown spindel:spindel /home/spindel/.ssh/authorized_keys
+chmod 600 /home/spindel/.ssh/authorized_keys
+
+// instalacja docker
+sudo apt install -y docker.io docker-compose-v2
+sudo usermod -aG docker spindel // zeby mogl zarzadzac docker
+
+// nie pozwalaj logować się bezpośrednio jako root
+sudo tee /etc/ssh/sshd_config.d/99-spindel-hardening.conf >/dev/null <<'EOF'
+PermitRootLogin no
+EOF
+
+sudo sshd -t // sprawdzenie skladni. brak outputu = OK
+
+// pobranie projektu
+sudo mkdir -p /opt/wymiana-zajec
+sudo chown spindel:spindel /opt/wymiana-zajec
+git --version // jesli nie, to: sudo apt install -y git
+
+// uwtorz klucz -> dodaj na gh jako deploy key -> chmod 600 ~/.ssh/config
+chmod 600 ~/.ssh/id_ed25519_github
+chmod 644 ~/.ssh/id_ed25519_github.pub
+ssh -T git@github.com
+
+skopiujemy repozytorium,
+utworzymy .env poza repozytorium,
+utworzymy external volume docker_wymiana_data,
+uruchomimy Compose.
+

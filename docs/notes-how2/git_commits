@@ -19,3 +19,4 @@ fix(auth): format validation errors
 feat(exchange): add request confirmation flow
 test(listings): cover duplicate listing protection
 docs(deployment): explain Docker startup
+

@@ -34,12 +34,17 @@ Zaimplementowane:
 - Frontend React/Vite: logowanie, rejestracja, listingi, filtry, tworzenie ogloszen i panel wymian.
 - Trwala sesja frontendu przez `localStorage` do czasu wylogowania albo wygasniecia tokenu.
 - Frontendowe formularze resetu hasla i ponowienia weryfikacji emaila.
-- 25 testow automatycznych.
+- Wieloetapowy Dockerfile frontendu: Node buduje aplikacje, Nginx serwuje `dist`.
+- Compose z backendem, frontendem, named volume SQLite, healthcheckami i zaleznoscia `service_healthy`.
+- Nginx przekazuje `/api/...` do uslugi `backend`, a pozostale sciezki serwuje jako SPA.
+- 26 testow automatycznych.
 
 Niezaimplementowane:
 
 - HTTPS i deployment produkcyjny.
-- Dockerfile frontendu i Nginx dla pelnego deploymentu frontend + backend.
+- Konfiguracja VPS, domena i HTTPS.
+- Instalacja monitoringu systemd na serwerze.
+- Backupy SQLite wykonywane z hosta i test odtworzenia.
 - Wspoldzielony storage rate limitingu, np. Redis.
 - Migracje schematu bazy danych.
 - Kolejka asynchronicznej wysylki maili.
@@ -48,11 +53,11 @@ Niezaimplementowane:
 ## 3. Struktura plikow
 
 ```text
-database.py                 silnik SQLite i zaleznosc sesji
-email_service.py            integracja z Brevo i tresci maili
-main.py                     aplikacja FastAPI, endpointy i logika procesu
-models.py                   modele SQLModel, enumy i walidacja
-translations.py             etykiety enumow PL/EN
+src/wymiana_zajec/database.py       silnik SQLite i zaleznosc sesji
+src/wymiana_zajec/email_service.py  integracja z Brevo i tresci maili
+src/wymiana_zajec/main.py           aplikacja FastAPI, endpointy i logika procesu
+src/wymiana_zajec/models.py         modele SQLModel, enumy i walidacja
+src/wymiana_zajec/translations.py   etykiety enumow PL/EN
 pyproject.toml              zaleznosci i konfiguracja uv
 uv.lock                    zablokowane wersje zaleznosci
 src/wymiana_zajec/          entrypoint pakietu CLI
@@ -71,7 +76,7 @@ Zaleznosci sa zarzadzane przez uv. Nie uzywaj `pip install` do dodawania zalezno
 ```powershell
 python -m uv sync
 python -m uv run pytest -q
-python -m uv run uvicorn main:app --reload
+python -m uv run uvicorn wymiana_zajec.main:app --reload
 ```
 
 API:
@@ -95,7 +100,7 @@ Backend przez Docker:
 docker compose -f docker/compose.yaml up --build
 ```
 
-Compose uruchamia backend na `http://localhost:8000` i przechowuje SQLite w wolumenie `wymiana_data`. Obecny `Dockerfile.frontend` jest jeszcze pusty, wiec frontend nie jest obecnie czescia Compose.
+Compose uruchamia backend na `http://localhost:8000`, frontend przez Nginx na `http://localhost:5175` i przechowuje SQLite w external volume `docker_wymiana_data`. Healthcheck backendu sprawdza `/health`, a healthcheck frontendu sprawdza odpowiedz Nginxa na porcie 80.
 
 Nie uzywaj `docker compose down -v`, jezeli chcesz zachowac baze w wolumenie.
 
