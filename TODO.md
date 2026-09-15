@@ -23,35 +23,12 @@ Przykładowy wpis cron do skonfigurowania na serwerze:
 0 */6 * * * cd /opt/wymiana-zajec && ./scripts/backup_sqlite.sh >> /var/log/wymiana-zajec-backup.log 2>&1
 ```
 
-## Backend jako usluga systemd
-
-- [x] Utworzyc uzytkownika systemowego `wymiana`.
-- [ ] Umiescic projekt w `/opt/wymiana-zajec`.
-- [ ] Utworzyc srodowisko uv w projekcie.
-- [ ] Umiescic sekrety w `/etc/wymiana-zajec/wymiana-zajec.env` z prawami tylko dla wlasciciela.
-- [ ] Skopiowac `deployment/systemd/wymiana-zajec.service` do `/etc/systemd/system/`.
-- [ ] Wykonac `systemctl daemon-reload`.
-- [ ] Wlaczyc start przy uruchomieniu systemu przez `systemctl enable wymiana-zajec`.
-- [ ] Uruchomic usluge przez `systemctl start wymiana-zajec`.
-- [ ] Sprawdzic status przez `systemctl status wymiana-zajec`.
-- [ ] Sprawdzic logi przez `journalctl -u wymiana-zajec`.
-
-## Alerty niedostepnosci
-
-- [ ] Dodac `ALERT_EMAIL` do pliku sekretow na serwerze.
-- [ ] Skopiowac `deployment/systemd/wymiana-zajec-healthcheck.service` i `.timer` do `/etc/systemd/system/`.
-- [ ] Nadać skryptowi health check prawa wykonywania.
-- [ ] Wlaczyc timer przez `systemctl enable --now wymiana-zajec-healthcheck.timer`.
-- [ ] Sprawdzic logi monitora przez `journalctl -u wymiana-zajec-healthcheck`.
-- [ ] Wykonac kontrolowany test niedostepnosci backendu.
-- [ ] Rozwazyc zewnetrzny monitoring, ktory zadziala takze po awarii calego serwera.
-
-### Docker monitor on the host
+## Docker monitor on the host
 
 - [ ] Skopiowac `scripts/check_health_inner.sh` do `/opt/wymiana-zajec/scripts/`.
 - [x] Upewnic sie, ze Compose ma healthcheck `/health` dla uslugi `backend`.
-- [ ] Utworzyc `/etc/wymiana-zajec/wymiana-zajec-health.env` z `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME` i `ALERT_EMAIL`; ustawic `chmod 600`.
-- [ ] Utworzyc osobna usluge `wymiana-zajec-healthcheck-inner.service` z `ExecStart=/opt/wymiana-zajec/scripts/check_health_inner.sh` i `EnvironmentFile=/etc/wymiana-zajec/wymiana-zajec-health.env`.
+- [x] Umiescic produkcyjny `.env` w `/opt/wymiana-zajec/.env` z prawami `chmod 600`.
+- [ ] Zainstalowac `wymiana-zajec-healthcheck-inner.service` z `ExecStart=/opt/wymiana-zajec/scripts/check_health_inner.sh` i `EnvironmentFile=/opt/wymiana-zajec/.env`.
 - [ ] Utworzyc timer `wymiana-zajec-healthcheck-inner.timer` uruchamiany co minute (`OnUnitActiveSec=1min`).
 - [ ] Wykonac `systemctl daemon-reload` oraz `systemctl enable --now wymiana-zajec-healthcheck-inner.timer`.
 - [ ] Sprawdzic wynik przez `systemctl status wymiana-zajec-healthcheck-inner.timer` i `journalctl -u wymiana-zajec-healthcheck-inner.service`.
