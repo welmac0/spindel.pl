@@ -11,8 +11,9 @@ SupplementaryGroups=docker
 WorkingDirectory=/opt/wymiana-zajec
 ExecStart=/opt/wymiana-zajec/scripts/check_health_inner.sh
 EnvironmentFile=/opt/wymiana-zajec/.env
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 StateDirectory=wymiana-zajec-health
 NoNewPrivileges=true
 PrivateTmp=true
-ProtectHome=true
+ProtectHome=read-only
 ProtectSystem=full
