@@ -1,0 +1,18 @@
+[Unit]
+Description=Check Wymiana Grup PW Docker service health
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=spindel
+Group=spindel
+SupplementaryGroups=docker
+WorkingDirectory=/opt/wymiana-zajec
+ExecStart=/opt/wymiana-zajec/scripts/check_health_inner.sh
+EnvironmentFile=/etc/wymiana-zajec/wymiana-zajec-health.env
+RuntimeDirectory=wymiana-zajec-health
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
