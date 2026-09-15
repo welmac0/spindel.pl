@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# na maszynie host jest docker engine, on odpala kontenery jako 
+# podprocesy glownego systemu, ale przez to ze skrypt uzywa docker inspect to 
+# check_health_inner bedzie dzialal bezproblemowo i nie uzywa portow
+
 # Host-side monitor for the Docker Compose backend health status.
 COMPOSE_FILE="${COMPOSE_FILE:-/opt/wymiana-zajec/docker/compose.yaml}"
 SERVICE_NAME="${SERVICE_NAME:-backend}"
