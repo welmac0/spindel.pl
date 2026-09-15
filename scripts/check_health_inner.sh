@@ -8,7 +8,7 @@ set -Eeuo pipefail
 # Host-side monitor for the Docker Compose backend health status.
 COMPOSE_FILE="${COMPOSE_FILE:-/opt/wymiana-zajec/docker/compose.prod.yaml}"
 SERVICE_NAME="${SERVICE_NAME:-backend}"
-STATE_FILE="${STATE_FILE:-/run/wymiana-zajec-health/docker-status}"
+STATE_FILE="${STATE_FILE:-/var/lib/wymiana-zajec-health/docker-status}"
 
 required_variables=(
     BREVO_API_KEY
