@@ -129,6 +129,7 @@ function App() {
   });
   const [groupHaveDraft, setGroupHaveDraft] = useState("");
   const [groupWantDraft, setGroupWantDraft] = useState("");
+  const maintenanceMode = import.meta.env.VITE_MAINTENANCE === "true";
 
   useEffect(() => {
     const savedToken = window.localStorage.getItem("spindel_access_token");
@@ -148,7 +149,7 @@ function App() {
             const data = await response.json().catch(() => null);
             throw new Error(formatApiError(data?.detail, "Nie udało się potwierdzić emaila."));
           }
-          setToast("Email potwierdzony. Zaloguj się na stronie Spindel.");
+          setToast(copy.activatedHelp);
           setAuthMode("login");
         })
         .catch((error) => setToast(error instanceof Error ? error.message : "Nie udało się potwierdzić emaila."));
@@ -170,7 +171,7 @@ function App() {
         setListingsError("");
       })
       .catch(() => {
-        if (!cancelled) setListingsError("Nie udało się pobrać ogłoszeń z backendu.");
+          if (!cancelled) setListingsError(language === "pl" ? "Nie udało się pobrać ogłoszeń z backendu." : "Could not load listings from the backend.");
       })
       .finally(() => {
         if (!cancelled) setListingsLoading(false);
@@ -204,18 +205,30 @@ function App() {
   const groupFormValid = /^\d+$/.test(newListing.groupHave.trim()) && areNumericGroups(wantedGroups) && !wantedGroups.includes(newListing.groupHave.trim());
   const copy = language === "pl" ? {
     login: "Zaloguj", register: "Załóż konto", logout: "Wyloguj", add: "Dodaj ogłoszenie",
-    eyebrow: "Wymiana grup zajęciowych", title: "Znajdź lepszą grupę.",
+    eyebrow: "Wymiana grup zajęciowych PW MiNI", title: "Znajdź lepszą grupę.",
     intro: "Przejrzyście, bez chaosu. Wybierz zajęcia, grupę i kierunek zamiany.",
     active: "Aktywne ogłoszenia", filters: "Filtry", haveWant: "mam → szukam",
     fulfilled: "Pomyślnie zrealizowanych zamian",
     interested: "Zainteresuj się wymianą", back: "Wstecz", next: "Dalej", publish: "Opublikuj",
+    loading: "Ładowanie ogłoszeń...", emptyTitle: "Nic tu jeszcze nie ma", emptyText: "Spróbuj zmienić filtry albo dodaj własne ogłoszenie.",
+    maintenanceTitle: "Krótka przerwa techniczna", maintenanceText: "Pracujemy nad aplikacją. Wrócimy za chwilę.", footer: "Wymiana grup dla studentów PW",
+    anySubject: "Każdy przedmiot", anySemester: "Każdy semestr", anyType: "Każdy typ", clear: "Wyczyść", showResults: "Pokaż wyniki",
+    narrow: "Zawęź listę", filterTitle: "Filtry", direction: "Kierunek", subject: "Przedmiot", semester: "Semestr", classType: "Typ zajęć", haveGroup: "Mam grupę", wantGroup: "Szukam grupy", close: "Zamknij", newListing: "Nowe ogłoszenie", cancel: "Anuluj", sent: "Wysłane", received: "Otrzymane", completed: "Zakończone", myListings: "Moje ogłoszenia", noSent: "Brak wysłanych zgłoszeń.", noReceived: "Brak otrzymanych zgłoszeń.", noCompleted: "Brak zakończonych wymian.", noListings: "Brak własnych ogłoszeń.", confirm: "Potwierdź", reject: "Odrzuć", contact: "Kontakt",
+    loginTitle: "Zaloguj się", registerTitle: "Załóż konto", resetTitle: "Reset hasła", resetConfirmTitle: "Ustaw nowe hasło", resendTitle: "Wyślij ponownie link", email: "Email", password: "Hasło", newPassword: "Nowe hasło", indexNumber: "Numer indeksu", send: "Wyślij", changePassword: "Zmień hasło", wait: "Chwila...",
+    subjectPlaceholder: "np. Algebra", groupPlaceholder: "np. 12", wantedPlaceholder: "np. 14, 15, 16", backLabel: "Wstecz", nextLabel: "Dalej", publishLabel: "Opublikuj", cancelLabel: "Anuluj", forgotPassword: "Nie pamiętam hasła", resendLink: "Wyślij ponownie link weryfikacyjny", resetHelp: "Link resetu jest ważny przez godzinę.", emailHelp: "Podaj email użyty przy rejestracji.", activatedHelp: "Email potwierdzony. Zaloguj się na stronie Spindel.",
   } : {
     login: "Log in", register: "Create account", logout: "Log out", add: "Add listing",
-    eyebrow: "Class group exchange", title: "Find a better group.",
+    eyebrow: "PW MiNI group exchange", title: "Find a better group.",
     intro: "Clear and calm. Choose a class, group and exchange direction.",
     active: "Active listings", filters: "Filters", haveWant: "have → want",
     fulfilled: "Successfully completed exchanges",
     interested: "Interested in this exchange", back: "Back", next: "Next", publish: "Publish",
+    loading: "Loading listings...", emptyTitle: "Nothing here yet", emptyText: "Try changing filters or add your own listing.",
+    maintenanceTitle: "Short maintenance break", maintenanceText: "We are working on the app. We will be back shortly.", footer: "Group exchange for PW students",
+    anySubject: "Any subject", anySemester: "Any semester", anyType: "Any class type", clear: "Clear", showResults: "Show results",
+    narrow: "Narrow the list", filterTitle: "Filters", direction: "Major", subject: "Subject", semester: "Semester", classType: "Class type", haveGroup: "Have group", wantGroup: "Want group", close: "Close", newListing: "New listing", cancel: "Cancel", sent: "Sent", received: "Received", completed: "Completed", myListings: "My listings", noSent: "No sent requests.", noReceived: "No received requests.", noCompleted: "No completed exchanges.", noListings: "No own listings.", confirm: "Confirm", reject: "Reject", contact: "Contact",
+    loginTitle: "Log in", registerTitle: "Create account", resetTitle: "Password reset", resetConfirmTitle: "Set a new password", resendTitle: "Resend verification link", email: "Email", password: "Password", newPassword: "New password", indexNumber: "Index number", send: "Send", changePassword: "Change password", wait: "Please wait...",
+    subjectPlaceholder: "e.g. Algebra", groupPlaceholder: "e.g. 12", wantedPlaceholder: "e.g. 14, 15, 16", backLabel: "Back", nextLabel: "Next", publishLabel: "Publish", cancelLabel: "Cancel", forgotPassword: "I forgot my password", resendLink: "Resend verification link", resetHelp: "The reset link is valid for one hour.", emailHelp: "Enter the email used during registration.", activatedHelp: "Email confirmed. Log in on the Spindel website.",
   };
 
   const applyFilters = () => {
@@ -255,6 +268,7 @@ function App() {
       } else {
         setAuthMode(null);
         setToast("Konto utworzone. Sprawdź email i kliknij link aktywacyjny.");
+        setToast(language === "pl" ? "Konto utworzone. Sprawdź email i kliknij link aktywacyjny." : "Account created. Check your email and click the activation link.");
       }
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "Nie udało się wykonać operacji.");
@@ -275,6 +289,7 @@ function App() {
       if (!response.ok) throw new Error(formatApiError(data?.detail, "Nie udało się wykonać operacji."));
       setAuthMode(null);
       setToast(isResetRequest ? "Jeśli konto istnieje, wysłaliśmy wiadomość z linkiem." : "Jeśli można wysłać wiadomość, otrzymasz nowy link weryfikacyjny.");
+      setToast(isResetRequest ? (language === "pl" ? "Jeśli konto istnieje, wysłaliśmy wiadomość z linkiem." : "If the account exists, we sent a message with a link.") : (language === "pl" ? "Jeśli można wysłać wiadomość, otrzymasz nowy link weryfikacyjny." : "If we can send a message, you will receive a new verification link."));
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "Nie udało się wykonać operacji.");
     } finally {
@@ -294,9 +309,9 @@ function App() {
       }
       setAuthMode("login");
       setAuthForm({ email: "", indexNumber: "", password: "" });
-      setToast("Hasło zmienione. Możesz się teraz zalogować.");
+      setToast(language === "pl" ? "Hasło zmienione. Możesz się teraz zalogować." : "Password changed. You can now log in.");
     } catch (error) {
-      setAuthError(error instanceof Error ? error.message : "Nie udało się zmienić hasła.");
+      setAuthError(error instanceof Error ? error.message : (language === "pl" ? "Nie udało się zmienić hasła." : "Could not change the password."));
     } finally {
       setAuthBusy(false);
     }
@@ -349,7 +364,7 @@ function App() {
 
   const loadMyListings = async () => {
     const response = await fetch("/api/me/listings", { headers: { Authorization: `Bearer ${accessToken}` } });
-    if (!response.ok) throw new Error("Nie udało się pobrać własnych ogłoszeń.");
+    if (!response.ok) throw new Error(language === "pl" ? "Nie udało się pobrać własnych ogłoszeń." : "Could not load your listings.");
     const data = await response.json() as Array<Record<string, unknown>>;
     setMyListings(data.map(mapListing));
   };
@@ -404,6 +419,10 @@ function App() {
     return `${listing.subject} · gr. ${listing.groupHave} → ${wantedGroups}`;
   };
 
+  if (maintenanceMode) {
+    return <main className="maintenance-screen"><div className="maintenance-mark">S</div><p className="eyebrow">Spindel</p><h1>{copy.maintenanceTitle}</h1><p>{copy.maintenanceText}</p></main>;
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -449,7 +468,7 @@ function App() {
       {fulfilledExchanges !== null && <div className="trust-line"><strong>{fulfilledExchanges}</strong> {copy.fulfilled}</div>}
 
       <section className="list-toolbar" aria-label="Narzędzia listy">
-        <div className="result-count">{listingsLoading ? "Ładowanie ogłoszeń..." : copy.active} {!listingsLoading && <strong>{filteredListings.length}</strong>}</div>
+        <div className="result-count">{listingsLoading ? copy.loading : copy.active} {!listingsLoading && <strong>{filteredListings.length}</strong>}</div>
         <button className="filter-button" onClick={() => { setDraftFilters(filters); setFilterOpen(true); }}>
           <Filter size={18} /> {copy.filters} {activeFilterCount > 0 && <span className="filter-count">{activeFilterCount}</span>}
         </button>
@@ -479,20 +498,20 @@ function App() {
         ))}
       </section>
 
-      {filteredListings.length === 0 && <div className="empty-state"><Search size={28} /><h2>Nic tu jeszcze nie ma</h2><p>Spróbuj zmienić filtry albo dodaj własne ogłoszenie.</p></div>}
+      {filteredListings.length === 0 && <div className="empty-state"><Search size={28} /><h2>{copy.emptyTitle}</h2><p>{copy.emptyText}</p></div>}
 
       {filterOpen && <div className="modal-backdrop" onMouseDown={() => setFilterOpen(false)}>
         <section className="dialog filter-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="filter-title">
-          <div className="dialog-header"><div><p className="eyebrow">Zawęź listę</p><h2 id="filter-title">Filtry</h2></div><button className="icon-button" onClick={() => setFilterOpen(false)} aria-label="Zamknij"><X size={20} /></button></div>
+          <div className="dialog-header"><div><p className="eyebrow">{copy.narrow}</p><h2 id="filter-title">{copy.filterTitle}</h2></div><button className="icon-button" onClick={() => setFilterOpen(false)} aria-label={copy.close}><X size={20} /></button></div>
           <div className="filter-fields">
-            <fieldset className="checkbox-field"><legend>Kierunek</legend><div className="checkbox-list">{(["mat", "iisi", "iad", "mad", "cs"] as const).map((major) => <label key={major}><input type="checkbox" checked={draftFilters.major.includes(major)} onChange={(event) => setDraftFilters({ ...draftFilters, major: event.target.checked ? [...draftFilters.major, major] : draftFilters.major.filter((value) => value !== major), subject: "" })} /> <span>{majorLabels[language][major]}</span></label>)}</div></fieldset>
-            <label>Przedmiot<select value={draftFilters.subject} onChange={(event) => setDraftFilters({ ...draftFilters, subject: event.target.value })}><option value="">Każdy przedmiot</option>{subjectOptions.map((subject) => <option key={subject}>{subject}</option>)}</select></label>
-            <label>Semestr<select value={draftFilters.semester} onChange={(event) => setDraftFilters({ ...draftFilters, semester: event.target.value })}><option value="">Każdy semestr</option>{Array.from({ length: 8 }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select></label>
-            <label>Typ zajęć<select value={draftFilters.classType} onChange={(event) => setDraftFilters({ ...draftFilters, classType: event.target.value })}><option value="">Każdy typ</option><option value="tutorial">{classTypeLabels[language].tutorial}</option><option value="labs">{classTypeLabels[language].labs}</option><option value="project">{classTypeLabels[language].project}</option></select></label>
-            <label>Mam grupę<input value={draftFilters.groupHave} onChange={(event) => setDraftFilters({ ...draftFilters, groupHave: event.target.value })} placeholder="np. 12" /></label>
-            <label>Szukam grupy<input value={draftFilters.groupWant} onChange={(event) => setDraftFilters({ ...draftFilters, groupWant: event.target.value })} placeholder="np. 14, 15, 16" /></label>
+            <fieldset className="checkbox-field"><legend>{copy.direction}</legend><div className="checkbox-list">{(["mat", "iisi", "iad", "mad", "cs"] as const).map((major) => <label key={major}><input type="checkbox" checked={draftFilters.major.includes(major)} onChange={(event) => setDraftFilters({ ...draftFilters, major: event.target.checked ? [...draftFilters.major, major] : draftFilters.major.filter((value) => value !== major), subject: "" })} /> <span>{majorLabels[language][major]}</span></label>)}</div></fieldset>
+            <label>{copy.subject}<select value={draftFilters.subject} onChange={(event) => setDraftFilters({ ...draftFilters, subject: event.target.value })}><option value="">{copy.anySubject}</option>{subjectOptions.map((subject) => <option key={subject}>{subject}</option>)}</select></label>
+            <label>{copy.semester}<select value={draftFilters.semester} onChange={(event) => setDraftFilters({ ...draftFilters, semester: event.target.value })}><option value="">{copy.anySemester}</option>{Array.from({ length: 8 }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select></label>
+            <label>{copy.classType}<select value={draftFilters.classType} onChange={(event) => setDraftFilters({ ...draftFilters, classType: event.target.value })}><option value="">{copy.anyType}</option><option value="tutorial">{classTypeLabels[language].tutorial}</option><option value="labs">{classTypeLabels[language].labs}</option><option value="project">{classTypeLabels[language].project}</option></select></label>
+            <label>{copy.haveGroup}<input value={draftFilters.groupHave} onChange={(event) => setDraftFilters({ ...draftFilters, groupHave: event.target.value })} placeholder="np. 12" /></label>
+            <label>{copy.wantGroup}<input value={draftFilters.groupWant} onChange={(event) => setDraftFilters({ ...draftFilters, groupWant: event.target.value })} placeholder="np. 14, 15, 16" /></label>
           </div>
-          <div className="dialog-actions"><button className="text-button" onClick={() => setDraftFilters(defaultFilters)}>Wyczyść</button><button className="primary-button" onClick={applyFilters}>Pokaż wyniki</button></div>
+          <div className="dialog-actions"><button className="text-button" onClick={() => setDraftFilters(defaultFilters)}>{copy.clear}</button><button className="primary-button" onClick={applyFilters}>{copy.showResults}</button></div>
         </section>
       </div>}
 
@@ -506,55 +525,56 @@ function App() {
 
       {addOpen && <div className="modal-backdrop" onMouseDown={() => setAddOpen(false)}>
         <section className="dialog detail-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="add-title">
-          <div className="dialog-header"><div><p className="eyebrow">Krok {step} z 3</p><h2 id="add-title">Nowe ogłoszenie</h2></div><button className="icon-button" onClick={() => setAddOpen(false)} aria-label="Zamknij"><X size={20} /></button></div>
+          <div className="dialog-header"><div><p className="eyebrow">{language === "pl" ? `Krok ${step} z 3` : `Step ${step} of 3`}</p><h2 id="add-title">{copy.newListing}</h2></div><button className="icon-button" onClick={() => setAddOpen(false)} aria-label={copy.close}><X size={20} /></button></div>
           <div className="stepper"><span className={step >= 1 ? "active" : ""}>1</span><i /><span className={step >= 2 ? "active" : ""}>2</span><i /><span className={step >= 3 ? "active" : ""}>3</span></div>
-          {step === 1 && <div className="filter-fields"><label>Kierunek<select value={newListing.major} onChange={(event) => setNewListing({ ...newListing, major: event.target.value as Listing["major"] })}><option value="mat">{majorLabels[language].mat}</option><option value="iisi">{majorLabels[language].iisi}</option><option value="iad">{majorLabels[language].iad}</option><option value="mad">{majorLabels[language].mad}</option><option value="cs">{majorLabels[language].cs}</option></select></label><label>Semestr<select value={newListing.semester} onChange={(event) => setNewListing({ ...newListing, semester: event.target.value })}>{Array.from({ length: 14 }, (_, index) => <option key={index + 1}>{index + 1}</option>)}</select></label></div>}
-          {step === 2 && <div className="filter-fields"><label>Przedmiot<input value={newListing.subject} onChange={(event) => setNewListing({ ...newListing, subject: event.target.value })} placeholder="np. Algebra" /></label><label>Typ zajęć<select value={newListing.classType} onChange={(event) => setNewListing({ ...newListing, classType: event.target.value as Listing["classType"] })}><option value="tutorial">{classTypeLabels[language].tutorial}</option><option value="labs">{classTypeLabels[language].labs}</option><option value="project">{classTypeLabels[language].project}</option></select></label></div>}
-          {step === 3 && <div className="filter-fields"><label>Grupa, którą masz<input value={newListing.groupHave} onChange={(event) => setNewListing({ ...newListing, groupHave: event.target.value })} placeholder="np. 12" required /></label><label>Grupy, których szukasz<input value={newListing.groupWant} onChange={(event) => setNewListing({ ...newListing, groupWant: event.target.value })} placeholder="np. 14, 15, 16" required />{newListing.groupWant && (!newListing.groupHave.trim() || !parseGroups(newListing.groupWant).length || parseGroups(newListing.groupWant).includes(newListing.groupHave.trim())) && <small className="field-error">Podaj grupę, którą masz oraz inne grupy, których szukasz.</small>}</label></div>}
-          <div className="dialog-actions"><button className="text-button" onClick={() => step === 1 ? setAddOpen(false) : setStep(step - 1)}>{step === 1 ? "Anuluj" : <><ChevronLeft size={17} /> Wstecz</>}</button>{step < 3 ? <button className="primary-button" disabled={step === 2 && !newListing.subject.trim()} onClick={() => setStep(step + 1)}>Dalej <ChevronRight size={17} /></button> : <button className="primary-button" disabled={!groupFormValid} onClick={async () => { try { const response = await fetch("/api/listings", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ major: newListing.major, semester: Number(newListing.semester), subject: newListing.subject.trim(), class_type: newListing.classType, group_have: newListing.groupHave.trim(), group_want: parseGroups(newListing.groupWant) }) }); const data = await response.json(); if (!response.ok) throw new Error(data.detail?.message ?? data.detail ?? "Nie udało się opublikować ogłoszenia."); await reloadListings(); setFilters(defaultFilters); setDraftFilters(defaultFilters); setAddOpen(false); setStep(1); setToast("Ogłoszenie opublikowane."); } catch (error) { setToast(error instanceof Error ? error.message : "Nie udało się opublikować ogłoszenia."); } }}>Opublikuj</button>}</div>
+          {step === 1 && <div className="filter-fields"><label>{copy.direction}<select value={newListing.major} onChange={(event) => setNewListing({ ...newListing, major: event.target.value as Listing["major"] })}><option value="mat">{majorLabels[language].mat}</option><option value="iisi">{majorLabels[language].iisi}</option><option value="iad">{majorLabels[language].iad}</option><option value="mad">{majorLabels[language].mad}</option><option value="cs">{majorLabels[language].cs}</option></select></label><label>{copy.semester}<select value={newListing.semester} onChange={(event) => setNewListing({ ...newListing, semester: event.target.value })}>{Array.from({ length: 14 }, (_, index) => <option key={index + 1}>{index + 1}</option>)}</select></label></div>}
+          {step === 2 && <div className="filter-fields"><label>{copy.subject}<input value={newListing.subject} onChange={(event) => setNewListing({ ...newListing, subject: event.target.value })} placeholder={copy.subjectPlaceholder} /></label><label>{copy.classType}<select value={newListing.classType} onChange={(event) => setNewListing({ ...newListing, classType: event.target.value as Listing["classType"] })}><option value="tutorial">{classTypeLabels[language].tutorial}</option><option value="labs">{classTypeLabels[language].labs}</option><option value="project">{classTypeLabels[language].project}</option></select></label></div>}
+          {step === 3 && <div className="filter-fields"><label>{copy.haveGroup}<input value={newListing.groupHave} onChange={(event) => setNewListing({ ...newListing, groupHave: event.target.value })} placeholder="np. 12" required /></label><label>{copy.wantGroup}<input value={newListing.groupWant} onChange={(event) => setNewListing({ ...newListing, groupWant: event.target.value })} placeholder="np. 14, 15, 16" required />{newListing.groupWant && (!newListing.groupHave.trim() || !parseGroups(newListing.groupWant).length || parseGroups(newListing.groupWant).includes(newListing.groupHave.trim())) && <small className="field-error">{language === "pl" ? "Podaj różne grupy." : "Enter different groups."}</small>}</label></div>}
+          <div className="dialog-actions"><button className="text-button" onClick={() => step === 1 ? setAddOpen(false) : setStep(step - 1)}>{step === 1 ? copy.cancelLabel : <><ChevronLeft size={17} /> {copy.backLabel}</>}</button>{step < 3 ? <button className="primary-button" disabled={step === 2 && !newListing.subject.trim()} onClick={() => setStep(step + 1)}>{copy.nextLabel} <ChevronRight size={17} /></button> : <button className="primary-button" disabled={!groupFormValid} onClick={async () => { try { const response = await fetch("/api/listings", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ major: newListing.major, semester: Number(newListing.semester), subject: newListing.subject.trim(), class_type: newListing.classType, group_have: newListing.groupHave.trim(), group_want: parseGroups(newListing.groupWant) }) }); const data = await response.json(); if (!response.ok) throw new Error(formatApiError(data.detail, language === "pl" ? "Nie udało się opublikować ogłoszenia." : "Could not publish the listing.")); await reloadListings(); setFilters(defaultFilters); setDraftFilters(defaultFilters); setAddOpen(false); setStep(1); setToast(language === "pl" ? "Ogłoszenie opublikowane." : "Listing published."); } catch (error) { setToast(error instanceof Error ? error.message : (language === "pl" ? "Nie udało się opublikować ogłoszenia." : "Could not publish the listing.")); } }}>{copy.publishLabel}</button>}</div>
         </section>
       </div>}
 
       {authMode && <div className="modal-backdrop" onMouseDown={() => setAuthMode(null)}>
         <section className="dialog auth-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="auth-title">
-          <div className="dialog-header"><div><p className="eyebrow">Spindel</p><h2 id="auth-title">{authMode === "login" ? "Zaloguj się" : authMode === "register" ? "Załóż konto" : authMode === "reset-request" ? "Reset hasła" : authMode === "reset-confirm" ? "Ustaw nowe hasło" : "Wyślij ponownie link"}</h2></div><button className="icon-button" onClick={() => setAuthMode(null)} aria-label="Zamknij"><X size={20} /></button></div>
+          <div className="dialog-header"><div><p className="eyebrow">Spindel</p><h2 id="auth-title">{authMode === "login" ? copy.loginTitle : authMode === "register" ? copy.registerTitle : authMode === "reset-request" ? copy.resetTitle : authMode === "reset-confirm" ? copy.resetConfirmTitle : copy.resendTitle}</h2></div><button className="icon-button" onClick={() => setAuthMode(null)} aria-label={copy.close}><X size={20} /></button></div>
           {(authMode === "login" || authMode === "register") && <form className="filter-fields" onSubmit={submitAuth}>
-            <label>Email<input type="email" required value={authForm.email} onChange={(event) => setAuthForm({ ...authForm, email: event.target.value })} placeholder="12345678@pw.edu.pl" /></label>
-            {authMode === "register" && <label>Numer indeksu<input required pattern="[0-9]{6}" value={authForm.indexNumber} onChange={(event) => setAuthForm({ ...authForm, indexNumber: event.target.value })} placeholder="123456" /></label>}
-            <label>Hasło<input type="password" required minLength={8} value={authForm.password} onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })} placeholder="Minimum 8 znaków" /></label>
+            <label>{copy.email}<input type="email" required value={authForm.email} onChange={(event) => setAuthForm({ ...authForm, email: event.target.value })} placeholder="12345678@pw.edu.pl" /></label>
+            {authMode === "register" && <label>{copy.indexNumber}<input required pattern="[0-9]{6}" value={authForm.indexNumber} onChange={(event) => setAuthForm({ ...authForm, indexNumber: event.target.value })} placeholder="123456" /></label>}
+            <label>{copy.password}<input type="password" required minLength={8} value={authForm.password} onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })} placeholder="Minimum 8 znaków" /></label>
             {authError && <small className="field-error">{authError}</small>}
-            <button className="primary-button full" disabled={authBusy}>{authBusy ? "Chwila..." : authMode === "login" ? "Zaloguj się" : "Załóż konto"}</button>
-            {authMode === "login" && <div className="auth-links"><button type="button" className="text-button" onClick={() => openUtilityAuth("reset-request")}>Nie pamiętam hasła</button><button type="button" className="text-button" onClick={() => openUtilityAuth("resend-verification")}>Wyślij ponownie link weryfikacyjny</button></div>}
+            <button className="primary-button full" disabled={authBusy}>{authBusy ? copy.wait : authMode === "login" ? copy.loginTitle : copy.registerTitle}</button>
+            {authMode === "login" && <div className="auth-links"><button type="button" className="text-button" onClick={() => openUtilityAuth("reset-request")}>{copy.forgotPassword}</button><button type="button" className="text-button" onClick={() => openUtilityAuth("resend-verification")}>{copy.resendLink}</button></div>}
           </form>}
           {authMode === "reset-request" || authMode === "resend-verification" ? <form className="filter-fields" onSubmit={submitUtilityAuth}>
-            <p className="auth-help">Podaj email użyty przy rejestracji.</p>
-            <label>Email<input type="email" required value={authForm.email} onChange={(event) => setAuthForm({ ...authForm, email: event.target.value })} placeholder="12345678@pw.edu.pl" /></label>
+            <p className="auth-help">{copy.emailHelp}</p>
+            <label>{copy.email}<input type="email" required value={authForm.email} onChange={(event) => setAuthForm({ ...authForm, email: event.target.value })} placeholder="12345678@pw.edu.pl" /></label>
             {authError && <small className="field-error">{authError}</small>}
-            <button className="primary-button full" disabled={authBusy}>{authBusy ? "Chwila..." : "Wyślij"}</button>
+            <button className="primary-button full" disabled={authBusy}>{authBusy ? copy.wait : copy.send}</button>
           </form> : null}
           {authMode === "reset-confirm" && <form className="filter-fields" onSubmit={submitPasswordReset}>
-            <p className="auth-help">Link resetu jest ważny przez godzinę.</p>
-            <label>Nowe hasło<input type="password" required minLength={8} value={authForm.password} onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })} placeholder="Minimum 8 znaków" /></label>
+            <p className="auth-help">{copy.resetHelp}</p>
+            <label>{copy.newPassword}<input type="password" required minLength={8} value={authForm.password} onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })} placeholder="Minimum 8 znaków" /></label>
             {authError && <small className="field-error">{authError}</small>}
-            <button className="primary-button full" disabled={authBusy}>{authBusy ? "Chwila..." : "Zmień hasło"}</button>
+            <button className="primary-button full" disabled={authBusy}>{authBusy ? copy.wait : copy.changePassword}</button>
           </form>}
         </section>
       </div>}
 
       {exchangeOpen && <div className="modal-backdrop" onMouseDown={() => setExchangeOpen(false)}>
         <section className="dialog exchange-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="exchange-title">
-          <div className="dialog-header"><div><p className="eyebrow">Panel użytkownika</p><h2 id="exchange-title">Moje wymiany</h2></div><button className="icon-button" onClick={() => setExchangeOpen(false)} aria-label="Zamknij"><X size={20} /></button></div>
+          <div className="dialog-header"><div><p className="eyebrow">{copy.myListings}</p><h2 id="exchange-title">{copy.sent} / {copy.received}</h2></div><button className="icon-button" onClick={() => setExchangeOpen(false)} aria-label={copy.close}><X size={20} /></button></div>
           <div className="exchange-sections">
-            <section><h3>Wysłane <span>{sentRequests.length}</span></h3>{sentRequests.length === 0 ? <p className="panel-empty">Brak wysłanych zgłoszeń.</p> : sentRequests.map((request) => <div className="exchange-row" key={`sent-${request.id}`}><div><strong>{requestTitle(request)}</strong><small>{request.status === "pending" ? "Oczekuje na decyzję" : request.status}</small>{request.owner_email && <small>Kontakt: {request.owner_email}</small>}</div></div>)}</section>
-            <section><h3>Otrzymane <span>{receivedRequests.length}</span></h3>{receivedRequests.length === 0 ? <p className="panel-empty">Brak otrzymanych zgłoszeń.</p> : receivedRequests.map((request) => <div className="exchange-row" key={`received-${request.id}`}><div><strong>{requestTitle(request)}</strong><small>{request.status === "pending" ? "Nowe zainteresowanie" : request.status}</small>{request.requester_email && <small>Kontakt: {request.requester_email}</small>}</div>{request.status === "pending" && <div className="row-actions"><button className="primary-button compact" disabled={exchangeBusy} onClick={() => exchangeAction(request.id, "confirm")}>Potwierdź</button><button className="text-button" disabled={exchangeBusy} onClick={() => exchangeAction(request.id, "reject")}>Odrzuć</button></div>}</div>)}</section>
-            <section><h3>Zakończone <span>{completedRequests.length}</span></h3>{completedRequests.length === 0 ? <p className="panel-empty">Brak zakończonych wymian.</p> : completedRequests.map((request) => <div className="exchange-row" key={`completed-${request.id}`}><div><strong>{requestTitle(request)}</strong><small>Wymiana potwierdzona</small>{request.requester_email && <small>Kontakt: {request.requester_email}</small>}{request.owner_email && <small>Kontakt: {request.owner_email}</small>}</div></div>)}</section>
-            <section><h3>Moje ogłoszenia <span>{myListings.length}</span></h3>{myListings.length === 0 ? <p className="panel-empty">Brak własnych ogłoszeń.</p> : myListings.map((listing) => <div className="exchange-row" key={`listing-${listing.id}`}><div><strong>{listing.subject} · gr. {listing.groupHave} → {listing.groupWant.join(", ")}</strong><small>{listing.status}</small></div>{(listing.status === "active" || listing.status === "pending") && <button className="text-button" disabled={exchangeBusy} onClick={() => cancelListing(listing.id)}>Anuluj</button>}</div>)}</section>
+            <section><h3>{copy.sent} <span>{sentRequests.length}</span></h3>{sentRequests.length === 0 ? <p className="panel-empty">{copy.noSent}</p> : sentRequests.map((request) => <div className="exchange-row" key={`sent-${request.id}`}><div><strong>{requestTitle(request)}</strong><small>{request.status === "pending" ? (language === "pl" ? "Oczekuje na decyzję" : "Waiting for a decision") : request.status}</small>{request.owner_email && <small>{copy.contact}: {request.owner_email}</small>}</div></div>)}</section>
+            <section><h3>{copy.received} <span>{receivedRequests.length}</span></h3>{receivedRequests.length === 0 ? <p className="panel-empty">{copy.noReceived}</p> : receivedRequests.map((request) => <div className="exchange-row" key={`received-${request.id}`}><div><strong>{requestTitle(request)}</strong><small>{request.status === "pending" ? (language === "pl" ? "Nowe zainteresowanie" : "New interest") : request.status}</small>{request.requester_email && <small>{copy.contact}: {request.requester_email}</small>}</div>{request.status === "pending" && <div className="row-actions"><button className="primary-button compact" disabled={exchangeBusy} onClick={() => exchangeAction(request.id, "confirm")}>{copy.confirm}</button><button className="text-button" disabled={exchangeBusy} onClick={() => exchangeAction(request.id, "reject")}>{copy.reject}</button></div>}</div>)}</section>
+            <section><h3>{copy.completed} <span>{completedRequests.length}</span></h3>{completedRequests.length === 0 ? <p className="panel-empty">{copy.noCompleted}</p> : completedRequests.map((request) => <div className="exchange-row" key={`completed-${request.id}`}><div><strong>{requestTitle(request)}</strong><small>{language === "pl" ? "Wymiana potwierdzona" : "Exchange confirmed"}</small>{request.requester_email && <small>{copy.contact}: {request.requester_email}</small>}{request.owner_email && <small>{copy.contact}: {request.owner_email}</small>}</div></div>)}</section>
+            <section><h3>{copy.myListings} <span>{myListings.length}</span></h3>{myListings.length === 0 ? <p className="panel-empty">{copy.noListings}</p> : myListings.map((listing) => <div className="exchange-row" key={`listing-${listing.id}`}><div><strong>{listing.subject} · gr. {listing.groupHave} → {listing.groupWant.join(", ")}</strong><small>{listing.status}</small></div>{(listing.status === "active" || listing.status === "pending") && <button className="text-button" disabled={exchangeBusy} onClick={() => cancelListing(listing.id)}>{copy.cancel}</button>}</div>)}</section>
           </div>
           <p className="panel-note">Numery ogłoszeń pozostają widoczne także po zakończeniu wymiany, aby historia była czytelna.</p>
         </section>
       </div>}
 
       {toast && <div className="toast" role="status"><span>{toast}</span><button onClick={() => setToast("")} aria-label="Zamknij komunikat"><X size={16} /></button></div>}
+      <footer className="site-footer"><span>{copy.footer}</span><span>Spindel · PW</span></footer>
     </main>
   );
 }

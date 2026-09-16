@@ -234,3 +234,40 @@ A successful run means:
 - the LaunchAgent is loaded and its log shows successful runs.
 
 This is an additional copy outside the VPS. It does not replace the VPS timer, the Docker volume, or periodic restore testing.
+
+## Restore test from a downloaded backup
+
+This test checks an existing local copy without touching the production database or Docker volume.
+
+Choose one downloaded backup:
+
+```bash
+cd "$HOME/wymiana-zajec-backups"
+BACKUP="$(ls -1t database-*.db | head -n 1)"
+```
+
+Verify its checksum:
+
+```bash
+shasum -a 256 -c "$BACKUP.sha256"
+```
+
+Check SQLite integrity. macOS does not always include `sqlite3`; install it with Homebrew if necessary:
+
+```bash
+sqlite3 "$BACKUP" 'PRAGMA integrity_check;'
+```
+
+Expected output:
+
+```text
+ok
+```
+
+Optionally confirm that the expected tables exist:
+
+```bash
+sqlite3 "$BACKUP" '.tables'
+```
+
+The test is successful when the checksum passes, `integrity_check` returns `ok`, and the expected tables are listed. Do not copy this file into the production Docker volume during the test.

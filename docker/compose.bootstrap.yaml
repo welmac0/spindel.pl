@@ -1,3 +1,5 @@
+# To plik tylko do pierwszego uzyskania certyfikatu Let’s Encrypt.
+
 services:
   frontend:
     volumes:

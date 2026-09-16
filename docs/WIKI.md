@@ -41,14 +41,19 @@ Zaimplementowane:
 
 Niezaimplementowane:
 
-- HTTPS i deployment produkcyjny.
-- Konfiguracja VPS, domena i HTTPS.
-- Instalacja monitoringu systemd na serwerze.
-- Backupy SQLite wykonywane z hosta i test odtworzenia.
 - Wspoldzielony storage rate limitingu, np. Redis.
 - Migracje schematu bazy danych.
 - Kolejka asynchronicznej wysylki maili.
 - Administracja i moderacja.
+
+Wdrozone produkcyjnie na VPS:
+
+- Ubuntu na Hetzner Cloud z uzytkownikiem `spindel` i logowaniem root SSH wylaczonym.
+- Domena `spindel.pl` wskazuje na VPS, a HTTPS obsluguje Nginx w kontenerze frontendowym.
+- Docker Compose produkcyjny uruchamia backend, frontend i Certbota.
+- SQLite jest w external volume `docker_wymiana_data`.
+- Systemd timer monitoruje healthcheck backendu co minute i wysyla alerty przez Brevo przy zmianie stanu.
+- Systemd timer wykonuje backup SQLite co 6 godzin do `/opt/wymiana-zajec/backups/`.
 
 ## 3. Struktura plikow
 
@@ -100,9 +105,19 @@ Backend przez Docker:
 docker compose -f docker/compose.yaml up --build
 ```
 
-Compose uruchamia backend na `http://localhost:8000`, frontend przez Nginx na `http://localhost:5175` i przechowuje SQLite w external volume `docker_wymiana_data`. Healthcheck backendu sprawdza `/health`, a healthcheck frontendu sprawdza odpowiedz Nginxa na porcie 80.
+Compose developerski uruchamia backend na `http://localhost:8000`, frontend przez Nginx na `http://localhost:5175` i przechowuje SQLite w external volume `docker_wymiana_data`. Produkcyjny `compose.prod.yaml` wystawia frontend na 80/443, nie publikuje backendu i uzywa Certbota. Healthcheck backendu sprawdza `/health`, a healthcheck frontendu sprawdza endpoint Nginxa.
 
 Nie uzywaj `docker compose down -v`, jezeli chcesz zachowac baze w wolumenie.
+
+### Przerwa techniczna
+
+Frontend ma prosty tryb maintenance sterowany podczas budowania obrazu. Na VPS ustaw `VITE_MAINTENANCE=true` w lokalnym `.env`, przebuduj tylko frontend i uruchom go ponownie:
+
+```bash
+docker compose -f docker/compose.prod.yaml up -d --build frontend
+```
+
+Aby wrocic do normalnej strony, ustaw `VITE_MAINTENANCE=false` albo usun te zmienna i wykonaj te sama komende. Nie zatrzymuj backendu bez potrzeby; podczas planowanej przerwy mozesz zatrzymac timer healthchecka, aby nie wysylal alertow o celowej niedostepnosci.
 
 Konfiguracja maili korzysta ze zmiennych srodowiskowych `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME` i `APP_BASE_URL`. Nie umieszczaj ich wartosci w dokumentacji, issue ani commitach.
 
@@ -180,6 +195,8 @@ Token jest jednorazowy. Po zmianie hasla obecny Bearer zostaje uniewazniony. Lim
 #### `POST /listings`
 
 Wymaga Bearer. Tworzy ogloszenie nalezace do zalogowanego uzytkownika. Nie mozna tworzyc ogloszen w czasie 4-dniowego cooldownu.
+
+Jeden uzytkownik moze miec maksymalnie 8 ogloszen w statusie `active` albo `pending`. Po osiagnieciu limitu endpoint zwraca `409`.
 
 `group_have` jest pojedyncza grupa, a `group_want` lista grup, np. `["14", "15"]`. Backend usuwa duplikaty i sortuje liste. W SQLite lista jest przechowywana jako tekst `"14,15"`. Jesli istnieje aktywne ogloszenie dla odwrotnej zamiany, odpowiedz to `409` z `conflicting_listing_id`.
 

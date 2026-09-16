@@ -50,7 +50,7 @@ Odrzucenie nie oznacza powrotu do `active`: uzytkownik, ktory odrzuca zaintereso
 
 ### Ogloszenie i wymiana
 
-Ogloszenia sa publiczne, ale tworzenie/edycja/usuwanie wymaga Bearera i wlasciciela. `group_have` to pojedyncza grupa, a `group_want` to lista grup w API; SQLite przechowuje ja jako posortowany tekst comma-separated. Tylko `active` jest widoczne. Zgloszenie wymaga zalogowania, nie moze byc do wlasnego ogloszenia i warunkowo przelacza `active -> pending`. Po 48 godzinach bez potwierdzenia zgloszenie wygasa, ogloszenie wraca do `active`, a wlasciciel dostaje cooldown 4 dni. Potwierdzenie zmienia zgloszenie na `confirmed` i ogloszenie na `fulfilled`. Odrzucenie oznacza `cancelled` dla zgloszenia i ogloszenia; nie dodajemy `rejected` do statusow ogloszen.
+Ogloszenia sa publiczne, ale tworzenie/edycja/usuwanie wymaga Bearera i wlasciciela. Jeden uzytkownik moze miec maksymalnie 8 ogloszen w statusie `active` lub `pending`. `group_have` to pojedyncza grupa, a `group_want` to lista grup w API; SQLite przechowuje ja jako posortowany tekst comma-separated. Tylko `active` jest widoczne. Zgloszenie wymaga zalogowania, nie moze byc do wlasnego ogloszenia i warunkowo przelacza `active -> pending`. Po 48 godzinach bez potwierdzenia zgloszenie wygasa, ogloszenie wraca do `active`, a wlasciciel dostaje cooldown 4 dni. Potwierdzenie zmienia zgloszenie na `confirmed` i ogloszenie na `fulfilled`. Odrzucenie oznacza `cancelled` dla zgloszenia i ogloszenia; nie dodajemy `rejected` do statusow ogloszen.
 
 ### Mail i awaria
 
@@ -86,6 +86,10 @@ Hashowanie hasel uzywa `scrypt`. Tokeny generuje `secrets`, a tokeny resetu i we
 `create_all()` nie wykonuje migracji istniejacych tabel. Zmiana modeli moze wymagac usuniecia lokalnego `database.db`; migracje sa celowo odlozone.
 
 Docker: `docker/compose.yaml` uruchamia backend na porcie 8000 i frontend przez Nginx na porcie 5175. `docker/Dockerfile.frontend` jest wieloetapowy: Node buduje `dist`, a Nginx go serwuje. `docker/nginx.conf` przekazuje `/api/...` do uslugi `backend` i obsluguje fallback SPA. SQLite jest w external volume `docker_wymiana_data`; oba serwisy maja healthcheck, a frontend zalezy od `backend` przez `service_healthy`. Nie czytaj `.env`; Compose przekazuje je przez `env_file`.
+
+Produkcja dziala na Hetzner VPS jako `docker compose -f docker/compose.prod.yaml`: frontendowy Nginx wystawia 80/443, Certbot odnawia certyfikat, backend nie ma publicznego portu, a SQLite jest w external volume `docker_wymiana_data`. Systemd uruchamia `wymiana-zajec-healthcheck-inner.timer` co minute oraz `wymiana-zajec-backup.timer` co 6 godzin. Monitor korzysta z `/opt/wymiana-zajec/.env`, zapisuje stan w `/var/lib/wymiana-zajec-health/docker-status` i wysyla alerty Brevo. Backup trafia do `/opt/wymiana-zajec/backups/`, ma checksum i `PRAGMA integrity_check`; wykonano test odtworzenia i potwierdzono retencje 14 kopii.
+
+Maintenance: frontend obsluguje flage build-time `VITE_MAINTENANCE`. Na VPS ustawia sie ja w lokalnym `.env` i wykonuje `docker compose -f docker/compose.prod.yaml up -d --build frontend`; powrot do aplikacji wymaga ustawienia `false`/usuniecia zmiennej i ponownego buildu.
 
 ## Walidacja po zmianach
 

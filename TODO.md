@@ -9,13 +9,13 @@
 
 ## Backup SQLite na serwerze Unix
 
-- [ ] Zainstalowac `wymiana-zajec-backup.service` i `wymiana-zajec-backup.timer` na VPS.
-- [ ] Wykonac pierwszy backup external volume `docker_wymiana_data`.
-- [ ] Zapisywac backupy w `/opt/wymiana-zajec/backups/` poza wolumenem aplikacji.
-- [ ] Sprawdzac kod wyjscia skryptu: `0` oznacza udany backup, `1` oznacza blad.
-- [ ] Sprawdzic logi backupu przez `journalctl -u wymiana-zajec-backup.service`.
-- [ ] Potwierdzic, ze retencja 14 ostatnich kopii dziala.
-- [ ] Okresowo wykonac test odtworzenia backupu przez `PRAGMA integrity_check`.
+- [x] Zainstalowac `wymiana-zajec-backup.service` i `wymiana-zajec-backup.timer` na VPS.
+- [x] Wykonac pierwszy backup external volume `docker_wymiana_data`.
+- [x] Zapisywac backupy w `/opt/wymiana-zajec/backups/` poza wolumenem aplikacji.
+- [x] Sprawdzac kod wyjscia skryptu: `0` oznacza udany backup, `1` oznacza blad.
+- [x] Sprawdzic logi backupu przez `journalctl -u wymiana-zajec-backup.service`.
+- [x] Potwierdzic, ze retencja 14 ostatnich kopii dziala.
+- [x] Okresowo wykonac test odtworzenia backupu przez `PRAGMA integrity_check`.
 
 Backup produkcyjny uzywa systemd timera co 6 godzin i kopiuje baze z external volume przez tymczasowy kontener Pythona.
 
@@ -33,9 +33,9 @@ Backup produkcyjny uzywa systemd timera co 6 godzin i kopiuje baze z external vo
 ## Docker storage
 
 - [x] SQLite trzymac na trwalym external named volume `docker_wymiana_data`, nie w warstwie kontenera.
-- [ ] Backupy trzymac osobno na hoście (`backups/`); backend nie powinien miec do nich dostepu.
-- [ ] Backup wykonywac z hosta przez `sqlite3 .backup` i okresowo testowac odtworzenie.
-- [ ] Docelowo kopiowac backupy poza serwer (inny dysk, NAS albo object storage).
+- [x] Backupy trzymac osobno na hoście (`backups/`); backend nie powinien miec do nich dostepu.
+- [x] Backup wykonywac z hosta przez `sqlite3 .backup` i okresowo testowac odtworzenie.
+- [x] Kopiowac backupy poza serwer na Maca przez SSH/rsync i weryfikowac checksumy.
 
 ## Docker Compose frontend + backend
 
@@ -48,20 +48,20 @@ Backup produkcyjny uzywa systemd timera co 6 godzin i kopiuje baze z external vo
 
 ## Limity biznesowe
 
-- [ ] Ograniczyc liczbe aktywnych i oczekujacych ogloszen jednego uzytkownika do 8.
-- [ ] Dodac test backendowy limitu 8 ogloszen i czytelny komunikat w frontendzie.
+- [x] Ograniczyc liczbe aktywnych i oczekujacych ogloszen jednego uzytkownika do 8.
+- [x] Dodac test backendowy limitu 8 ogloszen i czytelny komunikat bledu API.
 
 ## Frontend: mobile i lokalizacja
 
-- [ ] Poprawic mobilne filtry kierunkow: nazwy kierunkow nie moga byc zaslaniane przez checkboxy.
-- [ ] Przetlumaczyc wszystkie komunikaty pustych stanow, bledow i informacji z bazy na PL/EN.
-- [ ] Sprawdzic tlumaczenia na desktopie i telefonie dla obu wersji jezykowych.
+- [x] Poprawic mobilne filtry kierunkow: nazwy kierunkow nie moga byc zaslaniane przez checkboxy.
+- [x] Przetlumaczyc komunikaty pustych stanow, bledow, auth, filtrow i panelu wymian na PL/EN.
+- [x] Sprawdzic build frontendu dla obu wersji jezykowych.
 
 ## Branding i tresci
 
 - [ ] Zmienic teksty strony tak, aby byly ukierunkowane na wydzial i studentow PW.
 - [ ] Zaprojektowac i dodac docelowe logo Spindel.
-- [ ] Dodac stopke z podstawowymi informacjami, kontaktem i linkami formalnymi.
+- [x] Dodac stopke z podstawowymi informacjami, kontaktem i linkami formalnymi.
 
 ## Bezpieczenstwo przed produkcja
 
@@ -81,8 +81,8 @@ Backup produkcyjny uzywa systemd timera co 6 godzin i kopiuje baze z external vo
 
 ## Przerwa techniczna
 
-- [ ] Dodac kontrolowany tryb maintenance dla frontendu, z czytelnym komunikatem zamiast bledow API `502` przy zatrzymanym backendzie.
-- [ ] Dodac bezpieczna procedure wlaczania i wylaczania przerwy technicznej wraz z czasowym wylaczeniem alertow healthchecka.
+- [x] Dodac kontrolowany tryb maintenance dla frontendu, z czytelnym komunikatem zamiast bledow API `502` przy zatrzymanym backendzie.
+- [x] Dodac prosta procedure wlaczania i wylaczania maintenance przez `VITE_MAINTENANCE` i rebuild frontendu.
 
 ## Infrastruktura: e-mail, hosting i domena
 

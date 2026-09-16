@@ -143,6 +143,7 @@ CurrentUserDep: TypeAlias = Annotated[User, Depends(get_current_user)]
 VERIFICATION_TOKEN_LIFETIME = timedelta(days=7)
 PASSWORD_RESET_TOKEN_LIFETIME = timedelta(hours=1)
 LISTING_STALE_AFTER = timedelta(days=90)
+MAX_OPEN_LISTINGS_PER_USER = 8
 
 def send_logged_email(
     session: Session,
@@ -303,6 +304,17 @@ def create_listing(listing_in: ListingCreate, session: SessionDep, current_user:
     expire_stale_listings(session)
     if current_user.listing_cooldown_until and as_utc(current_user.listing_cooldown_until) > datetime.now(timezone.utc):
         raise HTTPException(status_code=403, detail="Listing creation is temporarily unavailable")
+    open_listing_count = session.exec(
+        select(func.count(Listing.id)).where(
+            Listing.owner_id == current_user.id,
+            Listing.status.in_((ListingStatus.active, ListingStatus.pending)),
+        )
+    ).one()
+    if open_listing_count >= MAX_OPEN_LISTINGS_PER_USER:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"You can have at most {MAX_OPEN_LISTINGS_PER_USER} active or pending listings",
+        )
     duplicate_listing = find_duplicate_listing(session, listing_in, current_user.id)
     if duplicate_listing:
         raise HTTPException(

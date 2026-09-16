@@ -5,6 +5,8 @@ COPY frontend/package.json frontend/package-lock.json ./
 # ci works like npm install --lock
 RUN npm ci
 COPY frontend/ ./
+ARG VITE_MAINTENANCE=false
+ENV VITE_MAINTENANCE=$VITE_MAINTENANCE
 RUN npm run build
 
 # ten obraz zawiera tylko pliki, bo kopiuje je z buildera. Nie zawiera danych z obrazu node'a

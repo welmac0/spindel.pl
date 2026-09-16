@@ -219,6 +219,26 @@ def test_identical_listing_is_allowed_for_another_user(client):
     assert second.json()["id"] != first.json()["id"]
 
 
+def test_user_cannot_have_more_than_eight_open_listings(client):
+    test_client, engine = client
+    register_and_verify(test_client, engine, "12345678@pw.edu.pl", "123456")
+    owner_headers = login(test_client, "12345678@pw.edu.pl")
+
+    for index in range(8):
+        payload = listing_payload()
+        payload["subject"] = f"Algebra {index}"
+        payload["group_have"] = str(index + 1)
+        payload["group_want"] = [str(index + 20)]
+        response = test_client.post("/listings", json=payload, headers=owner_headers)
+        assert response.status_code == 200
+
+    ninth_payload = listing_payload()
+    ninth_payload["subject"] = "Algebra 9"
+    ninth = test_client.post("/listings", json=ninth_payload, headers=owner_headers)
+    assert ninth.status_code == 409
+    assert "at most 8" in ninth.json()["detail"]
+
+
 def test_verification_page_contains_login_link(client, monkeypatch):
     test_client, engine = client
     captured = {}

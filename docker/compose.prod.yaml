@@ -30,6 +30,8 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.frontend
+      args:
+        VITE_MAINTENANCE: ${VITE_MAINTENANCE:-false}
 
     ports:
       - "80:80"
