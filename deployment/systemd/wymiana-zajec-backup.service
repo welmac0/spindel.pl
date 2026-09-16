@@ -1,0 +1,19 @@
+[Unit]
+Description=Backup Wymiana Grup PW SQLite database
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=spindel
+Group=spindel
+SupplementaryGroups=docker
+WorkingDirectory=/opt/wymiana-zajec
+Environment=DATABASE_VOLUME=docker_wymiana_data
+Environment=BACKUP_DIR=/opt/wymiana-zajec/backups
+Environment=RETENTION_COUNT=14
+ExecStart=/opt/wymiana-zajec/scripts/backup_sqlite.sh
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full

@@ -4,21 +4,22 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 DATABASE_PATH="${DATABASE_PATH:-$PROJECT_DIR/database.db}"
+DATABASE_VOLUME="${DATABASE_VOLUME:-}"
 BACKUP_DIR="${BACKUP_DIR:-$PROJECT_DIR/backups}"
 RETENTION_COUNT="${RETENTION_COUNT:-14}"
-
-if ! command -v sqlite3 >/dev/null 2>&1; then
-    printf 'Error: sqlite3 is required but was not found in PATH.\n' >&2
-    exit 1
-fi
 
 if ! command -v sha256sum >/dev/null 2>&1; then
     printf 'Error: sha256sum is required but was not found in PATH.\n' >&2
     exit 1
 fi
 
-if [[ ! -f "$DATABASE_PATH" ]]; then
+if [[ -z "$DATABASE_VOLUME" && ! -f "$DATABASE_PATH" ]]; then
     printf 'Error: database does not exist: %s\n' "$DATABASE_PATH" >&2
+    exit 1
+fi
+
+if [[ -n "$DATABASE_VOLUME" ]] && ! command -v docker >/dev/null 2>&1; then
+    printf 'Error: docker is required when DATABASE_VOLUME is set.\n' >&2
     exit 1
 fi
 
@@ -45,9 +46,25 @@ on_error() {
 }
 trap on_error ERR
 
-sqlite3 "$DATABASE_PATH" ".backup '$temporary_path'"
+if [[ -n "$DATABASE_VOLUME" ]]; then
+    docker run --rm \
+        -v "$DATABASE_VOLUME:/data:ro" \
+        -v "$BACKUP_DIR:/backup" \
+        python:3.13-slim \
+        python -c "import sqlite3; source = sqlite3.connect('/data/database.db'); target = sqlite3.connect('/backup/$(basename -- "$temporary_path")'); source.backup(target); target.close(); source.close()"
+else
+    if ! command -v sqlite3 >/dev/null 2>&1; then
+        printf 'Error: sqlite3 is required for a local database backup.\n' >&2
+        exit 1
+    fi
+    sqlite3 "$DATABASE_PATH" ".backup '$temporary_path'"
+fi
 
-integrity_result="$(sqlite3 "$temporary_path" 'PRAGMA integrity_check;')"
+if [[ -n "$DATABASE_VOLUME" ]]; then
+    integrity_result="$(docker run --rm -v "$BACKUP_DIR:/backup" python:3.13-slim python -c "import sqlite3; connection = sqlite3.connect('/backup/$(basename -- "$temporary_path")'); print(connection.execute('PRAGMA integrity_check').fetchone()[0]); connection.close()")"
+else
+    integrity_result="$(sqlite3 "$temporary_path" 'PRAGMA integrity_check;')"
+fi
 if [[ "$integrity_result" != "ok" ]]; then
     printf 'Error: SQLite integrity check failed: %s\n' "$integrity_result" >&2
     exit 1

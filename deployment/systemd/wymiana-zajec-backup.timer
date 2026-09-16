@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Wymiana Grup PW SQLite backup every six hours
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=6h
+Persistent=true
+Unit=wymiana-zajec-backup.service
+
+[Install]
+WantedBy=timers.target
