@@ -14,7 +14,7 @@ Backend aplikacji do wymiany grup zajeciowych dla studentow PW.
 - [x] Docker backenda z trwalym storage dla SQLite
 - [x] Frontend developerski React/Vite
 - [x] Frontend w Compose z Nginxem
-- [ ] HTTPS i deployment produkcyjny
+- [x] HTTPS i deployment produkcyjny na Hetzner VPS
 
 Pelna lista zadan znajduje sie w [TODO.md](TODO.md).
 
@@ -46,7 +46,7 @@ Backend mozna uruchomic przez Docker:
 docker compose -f docker/compose.yaml up --build
 ```
 
-Compose uruchamia backend na porcie 8000, frontend przez Nginx na porcie 5175 i zapisuje SQLite w wolumenie `wymiana_data`.
+Compose developerski uruchamia backend na porcie 8000, frontend przez Nginx na porcie 5175 i zapisuje SQLite w external volume `docker_wymiana_data`. Produkcja działa na Hetzner VPS przez `docker/compose.prod.yaml`, wystawia frontend na HTTPS przez Nginx, nie publikuje portu backendu, używa Certbota i ma backupy SQLite.
 
 Testy manualne wszystkich mechanik sa opisane w [scenariuszu end-to-end](docs/WIKI.md#9-test-manualny-end-to-end).
 

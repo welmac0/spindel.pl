@@ -37,7 +37,7 @@ Zaimplementowane:
 - Wieloetapowy Dockerfile frontendu: Node buduje aplikacje, Nginx serwuje `dist`.
 - Compose z backendem, frontendem, named volume SQLite, healthcheckami i zaleznoscia `service_healthy`.
 - Nginx przekazuje `/api/...` do uslugi `backend`, a pozostale sciezki serwuje jako SPA.
-- 26 testow automatycznych.
+- 29 testow automatycznych.
 
 Niezaimplementowane:
 
@@ -141,8 +141,7 @@ Body:
 
 Odpowiedzi:
 
-- `201` - konto utworzone i mail zaakceptowany przez Brevo.
-- `409` - email albo numer indeksu juz istnieje.
+- `201` - neutralna odpowiedz po przetworzeniu danych; nie ujawnia, czy konto juz istnialo.
 - `503` - konto zapisane, ale wysylka maila sie nie udala; dostawa ma status `failed` i mozna uzyc resend.
 
 #### `GET /verify?token=...`
@@ -161,7 +160,7 @@ Body:
 {"email": "12345678@pw.edu.pl"}
 ```
 
-Nowy mail mozna wyslac po wygasnieciu poprzedniego udanego maila. Po `failed` mozna probowac od razu. Limit: `3/hour` na IP.
+Zwraca neutralny komunikat i `200`, takze dla nieznanego, juz zweryfikowanego albo chwilowo zablokowanego konta. Nowy mail mozna wyslac po wygasnieciu poprzedniego udanego maila. Po `failed` mozna probowac od razu. Limit: `3/hour` na IP.
 
 #### `POST /login`
 
@@ -197,6 +196,8 @@ Token jest jednorazowy. Po zmianie hasla obecny Bearer zostaje uniewazniony. Lim
 Wymaga Bearer. Tworzy ogloszenie nalezace do zalogowanego uzytkownika. Nie mozna tworzyc ogloszen w czasie 4-dniowego cooldownu.
 
 Jeden uzytkownik moze miec maksymalnie 8 ogloszen w statusie `active` albo `pending`. Po osiagnieciu limitu endpoint zwraca `409`.
+
+Lista `group_want` moze zawierac maksymalnie 5 grup, a numer grupy maksymalnie 2 cyfry. Login i haslo maja limity dlugosci wejscia.
 
 `group_have` jest pojedyncza grupa, a `group_want` lista grup, np. `["14", "15"]`. Backend usuwa duplikaty i sortuje liste. W SQLite lista jest przechowywana jako tekst `"14,15"`. Jesli istnieje aktywne ogloszenie dla odwrotnej zamiany, odpowiedz to `409` z `conflicting_listing_id`.
 
@@ -310,7 +311,7 @@ Statusy:
 
 ### Dostawy maili
 
-`EmailDelivery` opisuje logiczna dostawe, a `EmailDeliveryAttempt` zapisuje konkretna probe. Status `failed` nie usuwa rekordu biznesowego. Rejestracja zwraca `503`, ale konto pozostaje niezweryfikowane; proces wymiany nie jest cofany tylko dlatego, ze powiadomienie nie doszlo.
+`EmailDelivery` opisuje logiczna dostawe, a `EmailDeliveryAttempt` zapisuje konkretna probe. Status `failed` nie usuwa rekordu biznesowego. Rejestracja zwykle zwraca neutralne `201`, a przy bledzie wysylki `503`; konto pozostaje niezweryfikowane. Proces wymiany nie jest cofany tylko dlatego, ze powiadomienie nie doszlo.
 
 Logi techniczne sa wysylane na stdout. Przy uruchomieniu przez systemd beda dostepne przez `journalctl -u wymiana-zajec`; aplikacja nie zapisuje sekretow ani tokenow do logow.
 

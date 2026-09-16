@@ -12,7 +12,7 @@ To aplikacja FastAPI + React/Vite do wymiany grup zajeciowych studentow PW. Stac
 2. Nie dodawaj zaleznosci przez pip. Uzywaj `python -m uv add <pakiet>`; testy uruchamiaj przez `python -m uv run pytest -q`.
 3. Nie usuwaj zmian uzytkownika i nie wykonuj destrukcyjnych operacji na bazie bez wyraznej zgody.
 4. Po zmianie kodu uruchom najpierw testy dotykajace zmienionego przeplywu, potem caly `pytest`.
-5. Nie cofaj unikalnosci emaila ani numeru indeksu. `409` przy duplikacie jest zamierzony.
+5. Nie cofaj unikalnosci emaila ani numeru indeksu. Endpoint rejestracji odpowiada neutralnie przy duplikacie, aby nie ujawniac istnienia konta.
 6. Nie ujawniaj, czy konto istnieje w reset-password request.
 
 ## Pliki wlascicielskie
@@ -31,7 +31,7 @@ To aplikacja FastAPI + React/Vite do wymiany grup zajeciowych studentow PW. Stac
 
 ### Konto
 
-Rejestracja wymaga emaila w formacie `8-cyfr@pw.edu.pl`, szesciocyfrowego numeru indeksu i hasla minimum 8 znakow. Email musi zostac zweryfikowany. Link aktywacyjny wazny jest 7 dni. Resend jest zablokowany przez 7 dni po udanej wysylce, ale mozliwy od razu po `failed`. Bearer jest wazny 7 dni.
+Rejestracja wymaga emaila w formacie `8-cyfr@pw.edu.pl`, szesciocyfrowego numeru indeksu i hasla minimum 8 znakow. Email musi zostac zweryfikowany. Link aktywacyjny wazny jest 7 dni. Resend zwraca neutralne `200` niezaleznie od istnienia i stanu konta; nowa wiadomosc jest wysylana po wygasnieciu poprzedniego linku albo po bledzie wysylki. Bearer jest wazny 7 dni.
 
 Reset hasla:
 
@@ -41,6 +41,8 @@ Reset hasla:
 - zmiana hasla uniewaznia auth token.
 
 Frontend zapisuje Bearer w `localStorage` pod kluczem `spindel_access_token`, odtwarza sesje po odswiezeniu i usuwa token przy wylogowaniu. Formularze obsluguja reset hasla, ustawienie hasla z tokenu URL `/reset-password?token=...` oraz resend weryfikacji.
+
+Po odczytaniu tokenu verify/reset frontend usuwa go z paska adresu przez `history.replaceState`. Login ma ograniczona dlugosc, a `group_want` ma limit 5 elementow i 2 cyfry na numer grupy.
 
 ### Panel wymian: decyzje UX
 
@@ -54,11 +56,11 @@ Ogloszenia sa publiczne, ale tworzenie/edycja/usuwanie wymaga Bearera i wlascici
 
 ### Mail i awaria
 
-Kazda logiczna wysylka ma `EmailDelivery`, a kazda proba `EmailDeliveryAttempt`. Nieudana wysylka jest zapisana jako `failed`. Rejestracja zwraca `503`, ale konto zostaje w bazie niezweryfikowane. Awaria powiadomienia wymiany nie cofa zapisanej wymiany.
+Kazda logiczna wysylka ma `EmailDelivery`, a kazda proba `EmailDeliveryAttempt`. Nieudana wysylka jest zapisana jako `failed`. Rejestracja zwraca neutralne `201`, ale przy awarii wysylki zwraca `503`; konto zostaje w bazie niezweryfikowane. Awaria powiadomienia wymiany nie cofa zapisanej wymiany.
 
 ## Endpointy
 
-- `POST /register` - konto, limit `5/minute`.
+- `POST /register` - konto, neutralna odpowiedz `201`, limit `5/minute`.
 - `GET /verify?token=...` - aktywacja.
 - `POST /resend-verification` - resend, limit `3/hour`.
 - `POST /login` - Bearer, limit `10/minute`.
@@ -87,7 +89,7 @@ Hashowanie hasel uzywa `scrypt`. Tokeny generuje `secrets`, a tokeny resetu i we
 
 Docker: `docker/compose.yaml` uruchamia backend na porcie 8000 i frontend przez Nginx na porcie 5175. `docker/Dockerfile.frontend` jest wieloetapowy: Node buduje `dist`, a Nginx go serwuje. `docker/nginx.conf` przekazuje `/api/...` do uslugi `backend` i obsluguje fallback SPA. SQLite jest w external volume `docker_wymiana_data`; oba serwisy maja healthcheck, a frontend zalezy od `backend` przez `service_healthy`. Nie czytaj `.env`; Compose przekazuje je przez `env_file`.
 
-Produkcja dziala na Hetzner VPS jako `docker compose -f docker/compose.prod.yaml`: frontendowy Nginx wystawia 80/443, Certbot odnawia certyfikat, backend nie ma publicznego portu, a SQLite jest w external volume `docker_wymiana_data`. Systemd uruchamia `wymiana-zajec-healthcheck-inner.timer` co minute oraz `wymiana-zajec-backup.timer` co 6 godzin. Monitor korzysta z `/opt/wymiana-zajec/.env`, zapisuje stan w `/var/lib/wymiana-zajec-health/docker-status` i wysyla alerty Brevo. Backup trafia do `/opt/wymiana-zajec/backups/`, ma checksum i `PRAGMA integrity_check`; wykonano test odtworzenia i potwierdzono retencje 14 kopii.
+Produkcja dziala na Hetzner VPS jako `docker compose -f docker/compose.prod.yaml`: frontendowy Nginx wystawia 80/443, Certbot odnawia certyfikat, backend nie ma publicznego portu, a SQLite jest w external volume `docker_wymiana_data`. Obrazy bazowe sa przypiete do wersji i digestow manifestow. Backend i frontend produkcyjny maja `read_only`, `cap_drop: ALL`, `no-new-privileges`, limity CPU/RAM oraz minimalne `tmpfs`; zapisy odbywaja sie tylko do wymaganych wolumenow. Systemd uruchamia `wymiana-zajec-healthcheck-inner.timer` co minute oraz `wymiana-zajec-backup.timer` co 6 godzin. Monitor korzysta z `/opt/wymiana-zajec/.env`, zapisuje stan w `/var/lib/wymiana-zajec-health/docker-status` i wysyla alerty Brevo. Payload alertu jest kodowany przez `python3`/`json.dumps`, wiec cudzyslowy i znaki nowej linii nie uszkadzaja JSON. Backup trafia do `/opt/wymiana-zajec/backups/`, ma checksum i `PRAGMA integrity_check`; wykonano test odtworzenia i potwierdzono retencje 14 kopii.
 
 Maintenance: frontend obsluguje flage build-time `VITE_MAINTENANCE`. Na VPS ustawia sie ja w lokalnym `.env` i wykonuje `docker compose -f docker/compose.prod.yaml up -d --build frontend`; powrot do aplikacji wymaga ustawienia `false`/usuniecia zmiennej i ponownego buildu.
 
@@ -97,7 +99,7 @@ Maintenance: frontend obsluguje flage build-time `VITE_MAINTENANCE`. Na VPS usta
 python -m uv run pytest -q
 ```
 
-Obecnie jest 26 testow backendowych. Testy nie lacza sie z Brevo: wysylka jest mockowana. Przy recznym tescie uzywaj scenariusza end-to-end w `docs/WIKI.md`, sekcja 9, oraz Swaggera na `http://127.0.0.1:8000/docs`. Chronione sa listingi mutujace, requesty wymian, panel `me` i anulowanie; publiczne sa odczyty aktywnych listingow, enumy, health oraz linki verify/reset.
+Obecnie jest 29 testow backendowych. Testy nie lacza sie z Brevo: wysylka jest mockowana. Przy recznym tescie uzywaj scenariusza end-to-end w `docs/WIKI.md`, sekcja 9, oraz Swaggera na `http://127.0.0.1:8000/docs`. Chronione sa listingi mutujace, requesty wymian, panel `me` i anulowanie; publiczne sa odczyty aktywnych listingow, enumy, health oraz linki verify/reset.
 
 ## Decyzje wdrozeniowe
 
