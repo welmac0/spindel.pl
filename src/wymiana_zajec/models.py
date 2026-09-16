@@ -36,6 +36,9 @@ class EmailDeliveryStatus(str, Enum):
     sent = "sent"
     failed = "failed"
 
+MAX_WANTED_GROUPS = 5
+MAX_GROUP_LENGTH = 2
+
 # Shared fields for Listing/Create/Public, so we don't repeat them
 # three times. Each of these models inherits from the same set,
 # so DB columns and API fields always stay in sync.
@@ -45,9 +48,13 @@ class EmailDeliveryStatus(str, Enum):
 # anything hits the database - without this SQLite would accept an
 # arbitrarily long string or a negative semester without complaint.
 def normalize_group_list(groups: list[str]) -> list[str]:
+    if len(groups) > MAX_WANTED_GROUPS:
+        raise ValueError(f"At most {MAX_WANTED_GROUPS} wanted groups are allowed")
     normalized = set()
     for group in groups:
         value = group.strip()
+        if len(value) > MAX_GROUP_LENGTH:
+            raise ValueError(f"Group numbers cannot exceed {MAX_GROUP_LENGTH} digits")
         if not value.isdigit() or int(value) <= 0:
             raise ValueError("Groups must contain positive numbers")
         normalized.add(str(int(value)))
@@ -186,9 +193,12 @@ class UserPublic(UserBase):
     email_verified: bool
     created_at: datetime
 
+class PublicMessage(SQLModel):
+    message: str
+
 class UserLogin(SQLModel):
-    email: str
-    password: str
+    email: str = Field(max_length=255)
+    password: str = Field(min_length=1, max_length=128)
 
 class VerificationResend(SQLModel):
     email: str

@@ -33,6 +33,7 @@ from wymiana_zajec.models import (
     ListingCreate,
     ListingPublic,
     ListingUpdate,
+    PublicMessage,
     ExchangeRequest,
     ExchangeRequestPublic,
     ExchangeStatus,
@@ -430,9 +431,12 @@ def delete_listing(listing_id: int, session: SessionDep, current_user: CurrentUs
 # in UserCreate - see models.py, index_number can't be derived from the
 # email). The user gets back a UserPublic with email_verified=False -
 # the account isn't active yet until they click the link with the token.
-@app.post("/register", response_model=UserPublic, status_code=status.HTTP_201_CREATED)
+@app.post("/register", response_model=PublicMessage, status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/minute")
 def register_user(request: Request, user_in: UserCreate, session: SessionDep):
+    generic_message = PublicMessage(
+        message="If the registration data is valid, check your email for an activation link."
+    )
     token = secrets.token_urlsafe(32)
     user = User(
         email=user_in.email,
@@ -449,10 +453,7 @@ def register_user(request: Request, user_in: UserCreate, session: SessionDep):
         session.commit()
     except IntegrityError:
         session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="An account with this email or index number already exists",
-        )
+        return generic_message
     session.refresh(user)
     sent = send_logged_email(
         session,
@@ -469,18 +470,21 @@ def register_user(request: Request, user_in: UserCreate, session: SessionDep):
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Verification email could not be sent",
         )
-    return user
+    return generic_message
 
-@app.post("/resend-verification", response_model=UserPublic)
+@app.post("/resend-verification", response_model=PublicMessage)
 @limiter.limit("3/hour")
 def resend_verification(
     request: Request, resend_request: VerificationResend, session: SessionDep
 ):
+    generic_message = PublicMessage(
+        message="If we can send a verification email, you will receive a new link."
+    )
     user = session.exec(select(User).where(User.email == resend_request.email)).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        return generic_message
     if user.email_verified:
-        raise HTTPException(status_code=400, detail="Email is already verified")
+        return generic_message
     now = datetime.now(timezone.utc)
     latest_delivery = session.exec(
         select(EmailDelivery)
@@ -496,10 +500,7 @@ def resend_verification(
         and user.verification_token_expires_at
         and as_utc(user.verification_token_expires_at) > now
     ):
-        raise HTTPException(
-            status_code=429,
-            detail="Verification email can be resent after the current link expires",
-        )
+        return generic_message
     token = secrets.token_urlsafe(32)
     user.verification_token_hash = token_hash(token)
     user.verification_token_expires_at = now + VERIFICATION_TOKEN_LIFETIME
@@ -520,7 +521,7 @@ def resend_verification(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Verification email could not be sent",
         )
-    return user
+    return generic_message
 
 @app.post("/login", response_model=AuthToken)
 @limiter.limit("10/minute")

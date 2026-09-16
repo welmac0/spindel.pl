@@ -141,8 +141,10 @@ function App() {
     if (urlToken && window.location.pathname === "/reset-password") {
       setResetToken(urlToken);
       setAuthMode("reset-confirm");
+      window.history.replaceState({}, "", "/reset-password");
     }
     if (urlToken && window.location.pathname === "/verify") {
+      window.history.replaceState({}, "", "/verify");
       fetch(`/api/verify?token=${encodeURIComponent(urlToken)}`)
         .then(async (response) => {
           if (!response.ok) {
@@ -267,8 +269,7 @@ function App() {
         setAuthMode(null);
       } else {
         setAuthMode(null);
-        setToast("Konto utworzone. Sprawdź email i kliknij link aktywacyjny.");
-        setToast(language === "pl" ? "Konto utworzone. Sprawdź email i kliknij link aktywacyjny." : "Account created. Check your email and click the activation link.");
+        setToast(language === "pl" ? "Jeśli dane są poprawne, sprawdź email i kliknij link aktywacyjny." : "If the data is valid, check your email and click the activation link.");
       }
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "Nie udało się wykonać operacji.");
@@ -288,7 +289,6 @@ function App() {
       const data = response.status === 204 ? null : await response.json();
       if (!response.ok) throw new Error(formatApiError(data?.detail, "Nie udało się wykonać operacji."));
       setAuthMode(null);
-      setToast(isResetRequest ? "Jeśli konto istnieje, wysłaliśmy wiadomość z linkiem." : "Jeśli można wysłać wiadomość, otrzymasz nowy link weryfikacyjny.");
       setToast(isResetRequest ? (language === "pl" ? "Jeśli konto istnieje, wysłaliśmy wiadomość z linkiem." : "If the account exists, we sent a message with a link.") : (language === "pl" ? "Jeśli można wysłać wiadomość, otrzymasz nowy link weryfikacyjny." : "If we can send a message, you will receive a new verification link."));
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "Nie udało się wykonać operacji.");

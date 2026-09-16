@@ -166,6 +166,17 @@ def test_wanted_groups_are_sorted_deduplicated_and_stored_as_text(client):
         assert listing.group_want == "14,15"
 
 
+def test_wanted_groups_have_a_count_limit(client):
+    test_client, engine = client
+    register_and_verify(test_client, engine, "12345678@pw.edu.pl", "123456")
+    owner_headers = login(test_client, "12345678@pw.edu.pl")
+    payload = listing_payload()
+    payload["group_want"] = [str(index) for index in range(2, 23)]
+
+    response = test_client.post("/listings", json=payload, headers=owner_headers)
+    assert response.status_code == 422
+
+
 def test_inverse_active_listing_blocks_publication(client):
     test_client, engine = client
     register_and_verify(test_client, engine, "12345678@pw.edu.pl", "123456")
@@ -402,7 +413,7 @@ def test_partial_update_cannot_make_groups_equal(client):
     assert response.status_code == 422
 
 
-def test_verification_expires_after_seven_days_and_resend_is_blocked_beforehand(client):
+def test_verification_expires_after_seven_days_and_resend_is_neutral_beforehand(client):
     test_client, engine = client
     response = test_client.post(
         "/register",
@@ -429,12 +440,42 @@ def test_verification_expires_after_seven_days_and_resend_is_blocked_beforehand(
         user.verification_token_expires_at = datetime.now(timezone.utc) + timedelta(days=1)
         session.add(user)
         session.commit()
-    assert (
-        test_client.post(
-            "/resend-verification", json={"email": "12345678@pw.edu.pl"}
-        ).status_code
-        == 429
+    resend_while_active = test_client.post(
+        "/resend-verification", json={"email": "12345678@pw.edu.pl"}
     )
+    assert resend_while_active.status_code == 200
+    assert resend_while_active.json() == resend.json()
+
+
+def test_registration_and_resend_do_not_reveal_account_existence(client):
+    test_client, engine = client
+    existing = test_client.post(
+        "/register",
+        json={
+            "email": "12345678@pw.edu.pl",
+            "index_number": "123456",
+            "password": "correct horse battery staple",
+        },
+    )
+    duplicate = test_client.post(
+        "/register",
+        json={
+            "email": "12345678@pw.edu.pl",
+            "index_number": "654321",
+            "password": "correct horse battery staple",
+        },
+    )
+    assert duplicate.status_code == existing.status_code == 201
+    assert duplicate.json() == existing.json()
+
+    unknown_resend = test_client.post(
+        "/resend-verification", json={"email": "87654321@pw.edu.pl"}
+    )
+    known_resend = test_client.post(
+        "/resend-verification", json={"email": "12345678@pw.edu.pl"}
+    )
+    assert unknown_resend.status_code == known_resend.status_code == 200
+    assert unknown_resend.json() == known_resend.json()
 
 
 def test_verification_token_is_hashed_but_raw_token_still_works(client, monkeypatch):
