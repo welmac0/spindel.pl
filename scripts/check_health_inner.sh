@@ -34,6 +34,11 @@ if ! command -v curl >/dev/null 2>&1; then
     exit 1
 fi
 
+if ! command -v python3 >/dev/null 2>&1; then
+    printf 'Error: python3 is required for JSON encoding but was not found in PATH.\n' >&2
+    exit 1
+fi
+
 mkdir -p "$(dirname -- "$STATE_FILE")"
 previous_status="$(cat "$STATE_FILE" 2>/dev/null || printf 'unknown')"
 
@@ -53,6 +58,19 @@ fi
 send_alert() {
     local subject="$1"
     local text_content="$2"
+    local payload
+
+    payload="$({
+        ALERT_SENDER_NAME="$BREVO_SENDER_NAME" \
+        ALERT_SENDER_EMAIL="$BREVO_SENDER_EMAIL" \
+        ALERT_EMAIL="$ALERT_EMAIL" \
+        ALERT_SUBJECT="$subject" \
+        ALERT_TEXT="$text_content" \
+        python3 -c 'import json, os; print(json.dumps({"sender": {"name": os.environ["ALERT_SENDER_NAME"], "email": os.environ["ALERT_SENDER_EMAIL"]}, "to": [{"email": os.environ["ALERT_EMAIL"]}], "subject": os.environ["ALERT_SUBJECT"], "textContent": os.environ["ALERT_TEXT"]}, ensure_ascii=False))'
+    })" || {
+        printf 'Error: could not encode alert JSON.\n' >&2
+        return 1
+    }
 
     curl --fail --silent --show-error --max-time 20 \
         --request POST \
@@ -60,9 +78,7 @@ send_alert() {
         --header "accept: application/json" \
         --header "api-key: $BREVO_API_KEY" \
         --header "content-type: application/json" \
-        --data-binary @- <<EOF
-{"sender":{"name":"$BREVO_SENDER_NAME","email":"$BREVO_SENDER_EMAIL"},"to":[{"email":"$ALERT_EMAIL"}],"subject":"$subject","textContent":"$text_content"}
-EOF
+        --data-binary "$payload"
 }
 
 if [[ "$current_status" == "down" && "$previous_status" != "down" ]]; then

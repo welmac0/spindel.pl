@@ -17,6 +17,16 @@ services:
       - wymiana_data:/app/data 
     # wolumen Dockerowy wymiana_data -> /app/data wewnątrz kontenera backendu
     # wiec baza bedzie w /app/data/database.db
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    cpus: "0.75"
+    mem_limit: 512m
+    pids_limit: 128
 
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
@@ -41,6 +51,18 @@ services:
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - certbot_www:/var/www/certbot:ro
       - ./nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    cpus: "0.50"
+    mem_limit: 256m
+    pids_limit: 128
 
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--output-document=/dev/null", "http://127.0.0.1/nginx-health"]
@@ -56,10 +78,19 @@ services:
     restart: unless-stopped
 
   certbot:
-    image: certbot/certbot:latest
+    image: certbot/certbot:v5.2.2@sha256:5255405f241cd64b121f36ef0172711420816bbbd9c029674de53e5ed953182d
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt
       - certbot_www:/var/www/certbot
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    cpus: "0.25"
+    mem_limit: 256m
+    pids_limit: 64
     entrypoint: /bin/sh
     command: -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot; sleep 12h & wait $${!}; done'
     restart: unless-stopped
