@@ -53,11 +53,13 @@ services:
       - ./nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
     read_only: true
     tmpfs:
-      - /var/cache/nginx
+      - /var/cache/nginx:mode=1777
       - /var/run
       - /tmp
     cap_drop:
       - ALL
+    cap_add:
+      - CHOWN
     security_opt:
       - no-new-privileges:true
     cpus: "0.50"
