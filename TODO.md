@@ -96,6 +96,7 @@ Backup produkcyjny uzywa systemd timera co 6 godzin i kopiuje baze z external vo
 | Zewnetrzny monitoring | Dodac monitoring niezalezny od VPS i jego systemd. | Niska |
 | Migracje | Dodac migracje schematu, np. Alembic. | Srednia |
 | Kolejka maili | Przeniesc wysylke maili do kolejki asynchronicznej. | Niska |
+| Szablony maili | Dopracowac wyglad maili transakcyjnych: branding Spindel, czytelny HTML, wersja mobilna i spójne CTA. | Niska |
 | Moderacja | Dodac panel administracyjny i proces zglaszania tresci. | Niska |
 
 ## Infrastruktura: e-mail, hosting i domena
