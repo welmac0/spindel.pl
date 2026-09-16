@@ -574,7 +574,7 @@ function App() {
       </div>}
 
       {toast && <div className="toast" role="status"><span>{toast}</span><button onClick={() => setToast("")} aria-label="Zamknij komunikat"><X size={16} /></button></div>}
-      <footer className="site-footer"><span>{copy.footer}</span><span>Spindel · PW</span></footer>
+      <footer className="site-footer"><span>{language === "pl" ? "Wymiana grup dla studentów MiNI PW" : "Group exchange for MiNI PW students"}</span><span><a href="https://maciejwelpa.pl">Kontakt</a><a href="/regulamin.html">Regulamin</a><a href="/polityka-prywatnosci.html">Polityka prywatności</a><span>Spindel · maciejwelpa.pl</span></span></footer>
     </main>
   );
 }

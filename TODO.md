@@ -62,6 +62,7 @@ Backup produkcyjny uzywa systemd timera co 6 godzin i kopiuje baze z external vo
 - [ ] Zmienic teksty strony tak, aby byly ukierunkowane na wydzial i studentow PW.
 - [ ] Zaprojektowac i dodac docelowe logo Spindel.
 - [x] Dodac stopke z podstawowymi informacjami, kontaktem i linkami formalnymi.
+- [x] Dodac roboczy regulamin i polityke prywatnosci jako strony publiczne.
 
 ## Bezpieczenstwo przed produkcja
 
@@ -70,12 +71,13 @@ Backup produkcyjny uzywa systemd timera co 6 godzin i kopiuje baze z external vo
 - [x] Wdrozyc HTTPS i przekierowanie HTTP -> HTTPS.
 - [ ] Dodac `Referrer-Policy: no-referrer` i usuwac tokeny verify/reset z adresu po ich odczytaniu.
 - [ ] Rozwazyc przeniesienie sesji z `localStorage` do ciasteczka `HttpOnly`, `Secure`, `SameSite`.
-- [ ] Dodac limity rate limitingu dla requestow wymian, anulowania i potwierdzania.
+- [x] Dodac limity rate limitingu dla tworzenia ogloszen, requestow wymian, anulowania i potwierdzania.
 - [ ] Dodac limity dlugosci loginu oraz liczby i rozmiaru elementow `group_want`.
 - [ ] Ujednolicic odpowiedzi rejestracji i resend, jezeli chcemy unikac enumeracji kont.
 - [x] Dodac HSTS, `X-Content-Type-Options` i `Referrer-Policy` w produkcyjnym Nginx.
-- [ ] Dodac CSP i ochrone przed framingiem w Nginx.
-- [ ] Przypiac wersje zaleznosci frontendowych i obrazow Dockerowych zamiast `latest`.
+- [x] Dodac CSP i ochrone przed framingiem w Nginx.
+- [x] Przypiac wersje zaleznosci frontendowych.
+- [ ] Przypiac wersje i digesty obrazow Dockerowych zamiast nieokreslonych tagow.
 - [ ] Rozwazyc hardening kontenerow: `read_only`, `cap_drop`, limity CPU/RAM i minimalne `tmpfs`.
 - [ ] Poprawic JSON escaping w alertach Bash wysylanych przez Brevo.
 
@@ -83,6 +85,21 @@ Backup produkcyjny uzywa systemd timera co 6 godzin i kopiuje baze z external vo
 
 - [x] Dodac kontrolowany tryb maintenance dla frontendu, z czytelnym komunikatem zamiast bledow API `502` przy zatrzymanym backendzie.
 - [x] Dodac prosta procedure wlaczania i wylaczania maintenance przez `VITE_MAINTENANCE` i rebuild frontendu.
+
+## Backlog
+
+| Temat | Opis | Krytycznosc |
+|---|---|---|
+| Sesja HttpOnly | Zastapic token w `localStorage` ciasteczkiem `HttpOnly`, `Secure`, `SameSite` i dodac ochrone CSRF. | Wysoka przed wieksza beta |
+| Limity wejscia | Ograniczyc dlugosc loginu oraz liczbe i rozmiar elementow `group_want`. | Srednia |
+| Enumeracja kont | Ujednolicic odpowiedzi rejestracji i resend, aby nie ujawniac istnienia kont. | Srednia |
+| Przypiecie obrazow | Przypiac wersje i digesty obrazow Dockerowych zamiast nieokreslonych tagow. | Srednia |
+| Hardening kontenerow | Rozwazyc `read_only`, `cap_drop`, limity CPU/RAM i minimalne `tmpfs`. | Niska |
+| Alert JSON | Dodac bezpieczne JSON escaping w skryptach Bash wysylajacych alerty Brevo. | Niska |
+| Zewnetrzny monitoring | Dodac monitoring niezalezny od VPS i jego systemd. | Niska |
+| Migracje | Dodac migracje schematu, np. Alembic. | Srednia |
+| Kolejka maili | Przeniesc wysylke maili do kolejki asynchronicznej. | Niska |
+| Moderacja | Dodac panel administracyjny i proces zglaszania tresci. | Niska |
 
 ## Infrastruktura: e-mail, hosting i domena
 

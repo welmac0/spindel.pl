@@ -299,7 +299,8 @@ def expire_stale_listings(session: Session) -> None:
         session.commit()
 
 @app.post("/listings", response_model=ListingPublic)
-def create_listing(listing_in: ListingCreate, session: SessionDep, current_user: CurrentUserDep):
+@limiter.limit("30/hour")
+def create_listing(request: Request, listing_in: ListingCreate, session: SessionDep, current_user: CurrentUserDep):
     expire_requests(session)
     expire_stale_listings(session)
     if current_user.listing_cooldown_until and as_utc(current_user.listing_cooldown_until) > datetime.now(timezone.utc):
@@ -643,8 +644,9 @@ def read_stats(session: SessionDep):
     return {"fulfilled_exchanges": fulfilled_count}
 
 @app.post("/listings/{listing_id}/requests", response_model=ExchangeRequestPublic, status_code=status.HTTP_201_CREATED)
+@limiter.limit("20/hour")
 def create_exchange_request(
-    listing_id: int, session: SessionDep, current_user: CurrentUserDep
+    request: Request, listing_id: int, session: SessionDep, current_user: CurrentUserDep
 ):
     expire_requests(session)
     listing = session.get(Listing, listing_id)
@@ -708,8 +710,9 @@ def read_exchange_requests(
     ).all()
 
 @app.post("/exchange-requests/{request_id}/confirm", response_model=ExchangeRequestPublic)
+@limiter.limit("30/hour")
 def confirm_exchange_request(
-    request_id: int, session: SessionDep, current_user: CurrentUserDep
+    request: Request, request_id: int, session: SessionDep, current_user: CurrentUserDep
 ):
     expire_requests(session)
     exchange_request = session.get(ExchangeRequest, request_id)
@@ -779,7 +782,8 @@ def read_my_listings(session: SessionDep, current_user: CurrentUserDep):
     return [listing_to_public(listing) for listing in listings]
 
 @app.post("/listings/{listing_id}/cancel", response_model=ListingPublic)
-def cancel_listing(listing_id: int, session: SessionDep, current_user: CurrentUserDep):
+@limiter.limit("30/hour")
+def cancel_listing(request: Request, listing_id: int, session: SessionDep, current_user: CurrentUserDep):
     listing = session.get(Listing, listing_id)
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found")
@@ -803,7 +807,8 @@ def cancel_listing(listing_id: int, session: SessionDep, current_user: CurrentUs
     return listing_to_public(listing)
 
 @app.post("/exchange-requests/{request_id}/reject", response_model=ExchangeRequestPublic)
-def reject_exchange_request(request_id: int, session: SessionDep, current_user: CurrentUserDep):
+@limiter.limit("30/hour")
+def reject_exchange_request(request: Request, request_id: int, session: SessionDep, current_user: CurrentUserDep):
     exchange_request = session.get(ExchangeRequest, request_id)
     if not exchange_request:
         raise HTTPException(status_code=404, detail="Request not found")
