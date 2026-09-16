@@ -7,9 +7,23 @@ Ten plik opisuje konfiguracje na osobnym Macu. Mac pobiera gotowe backupy z VPS 
 - VPS user: `spindel`
 - VPS backup directory: `/opt/wymiana-zajec/backups`
 - Mac local directory: `$HOME/wymiana-zajec-backups`
-- SSH key on Mac: `$HOME/.ssh/id_ed25519_wymiana_vps`
+- SSH key on Mac: `$HOME/.ssh/id_ed25519_spindel_mac`
+- SSH alias to use on the Mac: `spindel-vps`
 - Replace `VPS_HOST` below with the VPS IPv4 (91.99.16.118) address or `spindel.pl`.
 - Never put `.env`, Brevo keys, or private SSH keys in the repository.
+
+## Hardening (co to jest)
+
+Hardening to praktyka "uczynienia ustawień bardziej bezpiecznymi" bez psucia działania. W tym przypadku chodzi o:
+
+- użycie osobnego klucza SSH tylko do tego celu,
+- zablokowanie logowania hasłem przez `BatchMode=yes`,
+- ograniczenie SSH do jednego klucza (`IdentitiesOnly=yes`),
+- prywatne uprawnienia do katalogu i klucza (`chmod 700` / `chmod 600`),
+- ograniczenie katalogu backupów po stronie VPS do samych plików backupu,
+- logowanie i sprawdzanie checksumów, żeby nie pobrać uszkodzonego pliku.
+
+To są małe, działające poprawki bezpieczeństwa, które nie zmieniają logiki backupu.
 
 ## One-time Mac setup
 
@@ -20,17 +34,34 @@ mkdir -p "$HOME/bin" "$HOME/wymiana-zajec-backups"
 chmod 700 "$HOME/wymiana-zajec-backups"
 ```
 
+Add a named SSH alias for convenience and safer defaults:
+
+```bash
+mkdir -p "$HOME/.ssh"
+chmod 700 "$HOME/.ssh"
+cat >> "$HOME/.ssh/config" <<'EOF'
+Host spindel-vps
+    HostName 91.99.16.118
+    User spindel
+    IdentityFile ~/.ssh/id_ed25519_spindel_mac
+    IdentitiesOnly yes
+    BatchMode yes
+    StrictHostKeyChecking yes
+    ConnectTimeout 10
+EOF
+chmod 600 "$HOME/.ssh/config"
+```
+
 Test SSH first:
 
 ```bash
-ssh -i "$HOME/.ssh/id_ed25519_wymiana_vps" spindel@91.99.16.118
+ssh spindel-vps
 ```
 
 Test read-only access to the backup directory:
 
 ```bash
-ssh -i "$HOME/.ssh/id_ed25519_wymiana_vps" spindel@91.99.16.118 \
-  'find /opt/wymiana-zajec/backups -maxdepth 1 -type f -name "database-*.db" -print'
+ssh spindel-vps 'find /opt/wymiana-zajec/backups -maxdepth 1 -type f -name "database-*.db" -print'
 ```
 
 ## Backup download script
@@ -46,14 +77,16 @@ Paste this content and replace only `VPS_HOST`:
 ```bash
 #!/bin/bash
 set -Eeuo pipefail
+umask 077
 
 VPS_USER="spindel"
 VPS_HOST=91.99.16.118
-SSH_KEY="$HOME/.ssh/id_ed25519_wymiana_vps"
+SSH_KEY="$HOME/.ssh/id_ed25519_spindel_mac"
 REMOTE_DIR="/opt/wymiana-zajec/backups"
 LOCAL_DIR="$HOME/wymiana-zajec-backups"
 RETENTION_COUNT=14
 LOCK_DIR="$LOCAL_DIR/.lock"
+SSH_OPTS=(-i "$SSH_KEY" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=10)
 
 mkdir -p "$LOCAL_DIR"
 chmod 700 "$LOCAL_DIR"
@@ -75,7 +108,7 @@ if ! command -v rsync >/dev/null 2>&1; then
 fi
 
 rsync -az --partial \
-    -e "ssh -i $SSH_KEY -o BatchMode=yes" \
+    -e "ssh ${SSH_OPTS[*]}" \
     "$VPS_USER@$VPS_HOST:$REMOTE_DIR/" \
     "$LOCAL_DIR/"
 
@@ -87,7 +120,8 @@ for checksum_file in database-*.db.sha256; do
 done
 
 backup_count=0
-for backup_file in $(ls -1t database-*.db 2>/dev/null); do
+for backup_file in database-*.db; do
+    [[ -e "$backup_file" ]] || continue
     backup_count=$((backup_count + 1))
     if (( backup_count > RETENTION_COUNT )); then
         rm -f -- "$backup_file" "$backup_file.sha256"
@@ -119,6 +153,8 @@ The script downloads only backup files and checksum files. It does not use `--de
 
 ## Automatic schedule with launchd
 
+24 hours is usually a better default than 6 hours for this kind of SQLite backup copy: it reduces SSH load and keeps the backup job stable while still giving a recent local copy.
+
 Create the LaunchAgent file:
 
 ```bash
@@ -142,7 +178,7 @@ Paste this content and replace `YOUR_MAC_USERNAME` with the Mac username:
     </array>
 
     <key>StartInterval</key>
-    <integer>21600</integer>
+    <integer>86400</integer>
 
     <key>RunAtLoad</key>
     <true/>
