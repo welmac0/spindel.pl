@@ -23,11 +23,23 @@ jobs:
         run: |
           set -eu
           target_sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)"
-          ci_runs="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --branch main --limit 20 --json status,conclusion,headSha,databaseId)"
-          if ! printf '%s' "$ci_runs" | jq -e --arg sha "$target_sha" 'any(.[]; .headSha == $sha and .status == "completed" and .conclusion == "success")' >/dev/null; then
-              printf 'No successful CI run found for main commit %s. Recent runs:\n%s\n' "$target_sha" "$ci_runs"
+          for attempt in $(seq 1 60); do
+            ci_runs="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --branch main --limit 20 --json status,conclusion,headSha,databaseId)"
+            ci_status="$(printf '%s' "$ci_runs" | jq -r --arg sha "$target_sha" '[.[] | select(.headSha == $sha)] | .[0].status // empty')"
+            ci_conclusion="$(printf '%s' "$ci_runs" | jq -r --arg sha "$target_sha" '[.[] | select(.headSha == $sha)] | .[0].conclusion // empty')"
+            if [[ "$ci_status" == completed ]]; then
+              if [[ "$ci_conclusion" == success ]]; then
+                break
+              fi
+              printf 'CI for main commit %s finished with conclusion: %s.\n' "$target_sha" "$ci_conclusion"
               exit 1
-          fi
+            fi
+            if [[ "$attempt" == 60 ]]; then
+              printf 'Timed out waiting for CI for main commit %s. Recent runs:\n%s\n' "$target_sha" "$ci_runs"
+              exit 1
+            fi
+            sleep 10
+          done
 
       - name: Configure SSH
         env:
