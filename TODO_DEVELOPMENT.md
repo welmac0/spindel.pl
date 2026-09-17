@@ -30,7 +30,7 @@ Checklist usprawnien procesu wytwarzania i wdrazania aplikacji.
 - [ ] Sprawdzac `git diff --check` albo odpowiednik bez falszywych alarmow CRLF.
 - [ ] Dodac automatyczny build i publikacje wersjonowanych obrazow Dockerowych.
 - [ ] Dodac kontrolowany deploy na staging po przejsciu CI.
-- [ ] Dodac kontrolowany deploy produkcyjny po akceptacji.
+- [x] Dodac kontrolowany deploy produkcyjny po akceptacji.
 
 ## Priorytet 2: testy E2E
 
