@@ -22,8 +22,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
-          target_sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)"
-          ci_run="$(gh run list --workflow ci.yml --branch main --limit 1 --json status,conclusion,headSha)"
+          target_sha="$(gh api --repo "$GITHUB_REPOSITORY" "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)"
+          ci_run="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --branch main --limit 1 --json status,conclusion,headSha)"
           ci_sha="$(printf '%s' "$ci_run" | jq -r '.[0].headSha // empty')"
           ci_conclusion="$(printf '%s' "$ci_run" | jq -r '.[0].conclusion // empty')"
           test "$ci_sha" = "$target_sha"
