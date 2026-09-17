@@ -23,11 +23,11 @@ jobs:
         run: |
           set -eu
           target_sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)"
-          ci_run="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --branch main --limit 1 --json status,conclusion,headSha)"
-          ci_sha="$(printf '%s' "$ci_run" | jq -r '.[0].headSha // empty')"
-          ci_conclusion="$(printf '%s' "$ci_run" | jq -r '.[0].conclusion // empty')"
-          test "$ci_sha" = "$target_sha"
-          test "$ci_conclusion" = success
+          ci_runs="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --branch main --limit 20 --json status,conclusion,headSha,databaseId)"
+          if ! printf '%s' "$ci_runs" | jq -e --arg sha "$target_sha" 'any(.[]; .headSha == $sha and .status == "completed" and .conclusion == "success")' >/dev/null; then
+              printf 'No successful CI run found for main commit %s. Recent runs:\n%s\n' "$target_sha" "$ci_runs"
+              exit 1
+          fi
 
       - name: Configure SSH
         env:
