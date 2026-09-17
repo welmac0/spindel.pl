@@ -1,0 +1,89 @@
+name: Deploy production
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Verify CI for current main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          target_sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)"
+          ci_run="$(gh run list --workflow ci.yml --branch main --limit 1 --json status,conclusion,headSha)"
+          ci_sha="$(printf '%s' "$ci_run" | jq -r '.[0].headSha // empty')"
+          ci_conclusion="$(printf '%s' "$ci_run" | jq -r '.[0].conclusion // empty')"
+          test "$ci_sha" = "$target_sha"
+          test "$ci_conclusion" = success
+
+      - name: Configure SSH
+        env:
+          VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          set -eu
+          test -n "$VPS_SSH_PRIVATE_KEY"
+          test -n "$VPS_KNOWN_HOSTS"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$VPS_SSH_PRIVATE_KEY" > "$HOME/.ssh/deploy_key"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/deploy_key"
+          chmod 644 "$HOME/.ssh/known_hosts"
+
+      - name: Deploy and verify production
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          set -eu
+          test -n "$VPS_HOST"
+          test -n "$VPS_USER"
+          ssh -i "$HOME/.ssh/deploy_key" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          cd /opt/wymiana-zajec
+
+          git fetch origin main
+          git checkout main
+          git merge --ff-only origin/main
+
+          sudo -n systemctl start wymiana-zajec-backup.service
+          docker compose -f docker/compose.prod.yaml build backend frontend
+          docker compose -f docker/compose.prod.yaml up -d backend frontend
+
+          for attempt in $(seq 1 30); do
+              backend_id="$(docker compose -f docker/compose.prod.yaml ps -q backend)"
+              frontend_id="$(docker compose -f docker/compose.prod.yaml ps -q frontend)"
+              backend_health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "$backend_id" 2>/dev/null || true)"
+              frontend_health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' "$frontend_id" 2>/dev/null || true)"
+              if [[ "$backend_health" == healthy && "$frontend_health" == healthy ]]; then
+                  break
+              fi
+              if [[ "$attempt" == 30 ]]; then
+                  docker compose -f docker/compose.prod.yaml ps
+                  docker compose -f docker/compose.prod.yaml logs --tail=80 backend frontend
+                  exit 1
+              fi
+              sleep 2
+          done
+
+          curl --fail --silent --show-error https://spindel.pl/api/health
+          curl --fail --silent --show-error https://spindel.pl/nginx-health
+          docker compose -f docker/compose.prod.yaml ps
+          REMOTE

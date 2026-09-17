@@ -11,8 +11,9 @@ Checklist usprawnien procesu wytwarzania i wdrazania aplikacji.
 - [x] Istnieje dokumentacja projektu, API, wdrozenia i operacji.
 - [x] Istnieje procedura backupu i odtworzenia SQLite.
 - [x] Obrazy produkcyjne sa budowane z przypietymi wersjami i digestami.
-- [ ] Brakuje automatycznego CI po pushu.
-- [ ] Brakuje automatycznych testow Docker Compose przed wdrozeniem.
+- [x] Mamy automatyczne CI po pushu.
+- [x] Mamy automatyczna walidacje Docker Compose przed wdrozeniem.
+- [x] Przygotowac reczny workflow deployu produkcyjnego z kontrola sukcesu CI.
 - [ ] Brakuje testow przegladarkowych end-to-end.
 - [ ] Brakuje stagingu identycznego z produkcja.
 - [ ] Wdrozenie na VPS jest wykonywane recznie.
@@ -21,13 +22,12 @@ Checklist usprawnien procesu wytwarzania i wdrazania aplikacji.
 
 ## Priorytet 1: CI
 
-- [ ] Dodac GitHub Actions uruchamiane przy pull requestach i pushu.
-- [ ] Uruchamiac `python -m uv run pytest -q`.
-- [ ] Uruchamiac build frontendu przez `npm ci` i `npm run build`.
-- [ ] Uruchamiac `docker compose -f docker/compose.prod.yaml config -q` bez ujawniania sekretow.
-- [ ] Sprawdzac skladnie skryptow Bash przez `bash -n`.
+- [x] Dodac GitHub Actions uruchamiane przy pull requestach i pushu.
+- [x] Uruchamiac `uv run pytest -q`.
+- [x] Uruchamiac build frontendu przez `npm ci` i `npm run build`.
+- [x] Uruchamiac `docker compose -f docker/compose.prod.yaml config -q` bez ujawniania sekretow.
+- [x] Sprawdzac skladnie skryptow Bash przez `bash -n`.
 - [ ] Sprawdzac `git diff --check` albo odpowiednik bez falszywych alarmow CRLF.
-- [ ] Blokowac merge, gdy wymagane kontrole CI nie przejda.
 - [ ] Dodac automatyczny build i publikacje wersjonowanych obrazow Dockerowych.
 - [ ] Dodac kontrolowany deploy na staging po przejsciu CI.
 - [ ] Dodac kontrolowany deploy produkcyjny po akceptacji.
@@ -84,6 +84,12 @@ Checklist usprawnien procesu wytwarzania i wdrazania aplikacji.
 - [ ] Dopracowac docelowe logo i branding Spindel.
 - [ ] Dodac usuwanie konta i danych uzytkownika.
 - [ ] Dodac moderacje oraz zglaszanie tresci.
+
+## Proby odlozone i ograniczenia narzedzi
+
+- [x] Wymusic przejscie jobow CI i Pull Request przed merge'em przez GitHub Ruleset.
+	Powod: prywatne repozytorium na obecnym planie GitHub nie egzekwuje rulesetow; CI dziala, ale merge nie jest automatycznie blokowany.
+	Obejscie: recznie sprawdzac zielone joby przed merge'em albo przeniesc repo do organizacji z planem GitHub Team.
 
 ## Kryterium dojrzalosci procesu
 
