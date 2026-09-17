@@ -211,7 +211,7 @@ function App() {
     intro: "Przejrzyście, bez chaosu. Wybierz zajęcia, grupę i kierunek zamiany.",
     active: "Aktywne ogłoszenia", filters: "Filtry", haveWant: "mam → szukam",
     fulfilled: "Pomyślnie zrealizowanych zamian",
-    interested: "Zainteresuj się wymianą", back: "Wstecz", next: "Dalej", publish: "Opublikuj",
+    interested: "Aplikuj", back: "Wstecz", next: "Dalej", publish: "Opublikuj",
     loading: "Ładowanie ogłoszeń...", emptyTitle: "Nic tu jeszcze nie ma", emptyText: "Spróbuj zmienić filtry albo dodaj własne ogłoszenie.",
     maintenanceTitle: "Krótka przerwa techniczna", maintenanceText: "Pracujemy nad aplikacją. Wrócimy za chwilę.", footer: "Wymiana grup dla studentów PW",
     anySubject: "Każdy przedmiot", anySemester: "Każdy semestr", anyType: "Każdy typ", clear: "Wyczyść", showResults: "Pokaż wyniki",
@@ -224,13 +224,14 @@ function App() {
     intro: "Clear and calm. Choose a class, group and exchange direction.",
     active: "Active listings", filters: "Filters", haveWant: "have → want",
     fulfilled: "Successfully completed exchanges",
-    interested: "Interested in this exchange", back: "Back", next: "Next", publish: "Publish",
+    interested: "Apply", back: "Back", next: "Next", publish: "Publish",
     loading: "Loading listings...", emptyTitle: "Nothing here yet", emptyText: "Try changing filters or add your own listing.",
     maintenanceTitle: "Short maintenance break", maintenanceText: "We are working on the app. We will be back shortly.", footer: "Group exchange for PW students",
     anySubject: "Any subject", anySemester: "Any semester", anyType: "Any class type", clear: "Clear", showResults: "Show results",
     narrow: "Narrow the list", filterTitle: "Filters", direction: "Major", subject: "Subject", semester: "Semester", classType: "Class type", haveGroup: "Have group", wantGroup: "Want group", close: "Close", newListing: "New listing", cancel: "Cancel", sent: "Sent", received: "Received", completed: "Completed", myListings: "My listings", noSent: "No sent requests.", noReceived: "No received requests.", noCompleted: "No completed exchanges.", noListings: "No own listings.", confirm: "Confirm", reject: "Reject", contact: "Contact",
     loginTitle: "Log in", registerTitle: "Create account", resetTitle: "Password reset", resetConfirmTitle: "Set a new password", resendTitle: "Resend verification link", email: "Email", password: "Password", newPassword: "New password", indexNumber: "Index number", send: "Send", changePassword: "Change password", wait: "Please wait...",
     subjectPlaceholder: "e.g. Algebra", groupPlaceholder: "e.g. 12", wantedPlaceholder: "e.g. 14, 15, 16", backLabel: "Back", nextLabel: "Next", publishLabel: "Publish", cancelLabel: "Cancel", forgotPassword: "I forgot my password", resendLink: "Resend verification link", resetHelp: "The reset link is valid for one hour.", emailHelp: "Enter the email used during registration.", activatedHelp: "Email confirmed. Log in on the Spindel website.",
+    
   };
 
   const applyFilters = () => {

@@ -2,7 +2,7 @@
 
 ## 1. Cel projektu
 
-Wymiana Grup PW to backend aplikacji, w ktorej student moze opublikowac ogloszenie o zamianie grupy zajeciowej. Inny zweryfikowany student moze zglosic zainteresowanie. Wymiana wymaga potwierdzenia przez wlasciciela ogloszenia.
+Wymiana Grup PW to backend aplikacji, w ktorej student moze opublikowac ogloszenie o zamianie grupy zajeciowej. Inny zweryfikowany student moze zlozyc aplikacje na wymiane. Wymiana wymaga potwierdzenia przez wlasciciela ogloszenia.
 
 Frontend jest zaimplementowany jako React/Vite. W trybie developerskim korzysta z proxy `/api` do backendu FastAPI.
 
@@ -404,8 +404,7 @@ W lokalnej bazie developerskiej moze istniec konto testowe B utworzone poza kode
 
 1. W profilu B znajdz aktywne ogloszenie konta A.
 2. Przed zalogowaniem kliknij zainteresowanie. Oczekiwany rezultat: komunikat o koniecznosci logowania.
-3. Po zalogowaniu kontem B kliknij `Zainteresuj sie wymiana`.
-4. Oczekiwany rezultat: ogloszenie przechodzi na `pending` i znika z publicznej listy.
+3. Po zalogowaniu kontem B kliknij `Aplikuj`.4. Oczekiwany rezultat: ogloszenie przechodzi na `pending` i znika z publicznej listy.
 5. W profilu B otworz `Moje wymiany`: wpis jest w `Wyslane`.
 6. W profilu A otworz `Moje wymiany`: wpis jest w `Otrzymane`, z akcjami `Potwierdz` i `Odrzuc`.
 7. Przed potwierdzeniem sprawdz, ze email drugiej osoby nie jest widoczny.

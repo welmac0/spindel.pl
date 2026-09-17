@@ -59,6 +59,9 @@ Checklist przed udostepnieniem aplikacji szerszej grupie uzytkownikow.
 - [ ] Dopracowac docelowe logo Spindel.
 - [ ] Dopracowac szablony maili transakcyjnych: branding, HTML, mobile i CTA.
 
+## Priorytet 6: UI UX
+- [ ] Dodać do maila potwierdzającego wymianę i maila o wysłaniu aplikacji także numer indeksu studenta, oraz przygotować gotowy szablon do wysłania przez USOS/ePodania.
+
 ## Kryterium startu publicznej bety
 
 Publiczna beta moze wystartowac, gdy:
