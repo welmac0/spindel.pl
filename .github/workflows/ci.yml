@@ -1,39 +1,40 @@
 name: CI
 
-on:
-  push:
-  pull_request:
+on: # Workflow uruchamia się:
+  push: # po każdym git push,
+  pull_request: # przy każdym Pull Requeście.
+# puste - wszystkie branche
 
 permissions:
-  contents: read
+  contents: read # Workflow dostaje tylko prawo odczytu kodu repozytorium. Nie może samodzielnie pushować zmian ani tworzyć wydań
 
 jobs:
-  backend:
-    name: Backend tests
-    runs-on: ubuntu-latest
+  backend: # nazwa joba
+    name: Backend tests # nazwa wyswietlana
+    runs-on: ubuntu-latest # maszyna joba
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4 # Pobiera kod repozytorium na maszynę CI
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v6 # Instaluje narzędzie uv, używane w projekcie do zależności i testów.
         with:
-          enable-cache: true
+          enable-cache: true # Włącza cache zależności uv, aby kolejne workflow były szybsze.
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v5 # Instaluje i konfiguruje Pythona.
         with:
           python-version: "3.13"
 
       - name: Run backend tests
-        run: python -m uv run pytest -q
+        run: uv run pytest -q # Uruchamia wszystkie testy backendu przez środowisko zarządzane przez uv.
 
   frontend:
     name: Frontend build
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: frontend
+        working-directory: frontend # Każde polecenie run w tym jobie wykonuje się z katalogu frontend.
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -43,7 +44,7 @@ jobs:
         with:
           node-version: 26
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: frontend/package-lock.json # Włącza cache npm zależny od package-lock.json. Gdy lockfile się nie zmieni, instalacja jest szybsza
 
       - name: Install frontend dependencies
         run: npm ci
@@ -58,7 +59,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Check Bash scripts
+      - name: Check Bash scripts # Sprawdza składnię wszystkich skryptów .sh. Nie uruchamia ich i nie wysyła maili ani nie wykonuje backupu.
         run: bash -n scripts/*.sh
 
   compose:
@@ -68,12 +69,17 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Create empty CI environment file
-        run: touch .env
+      - name: Create empty CI environment file # Tworzy pusty .env, ponieważ compose.prod.yaml wymaga istnienia tego pliku przez env_file.
+        run: touch .env 
 
       - name: Validate production Compose
-        run: docker compose -f docker/compose.prod.yaml config -q
+        run: docker compose -f docker/compose.prod.yaml config -q # Sprawdza, czy Compose jest poprawny składniowo i czy da się go sparsować.
+          # -q oznacza tryb cichy. Ten krok:
+          # nie uruchamia kontenerów,
+          # nie buduje obrazów,
+          # nie łączy się z Brevo,
+          # nie wdraża niczego.
 
-      - name: Remove CI environment file
+      - name: Remove CI environment file # Uruchamia sprzątanie niezależnie od tego, czy wcześniejszy krok zakończył się sukcesem, czy błędem
         if: always()
         run: rm -f .env
