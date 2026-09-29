@@ -1,6 +1,6 @@
-# Wymiana Grup PW
+# Spindel — Wymiana Grup PW
 
-Backend aplikacji do wymiany grup zajeciowych dla studentow PW.
+Aplikacja webowa do wymiany grup zajeciowych dla studentow PW. Projekt jest obecnie udostepniany jako beta.
 
 ## Dokumentacja
 
@@ -12,7 +12,7 @@ Backend aplikacji do wymiany grup zajeciowych dla studentow PW.
 - [Operacje, backupy i wdrazanie](docs/operations.md)
 - [Kontekst dla agenta kodujacego](docs/LLM_CONTEXT.md)
 
-## Status prac
+## Funkcje i wdrozenie
 
 - [x] Backend MVP, auth, wymiany i maile
 - [x] Backup SQLite, checksum i health-check
@@ -39,7 +39,7 @@ Frontend developerski uruchom w drugim terminalu:
 
 ```powershell
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
