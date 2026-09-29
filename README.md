@@ -4,8 +4,13 @@ Backend aplikacji do wymiany grup zajeciowych dla studentow PW.
 
 ## Dokumentacja
 
-- [Wiki projektu](docs/WIKI.md) - architektura, API, przeplywy i decyzje.
-- [Kontekst dla LLM](docs/LLM_CONTEXT.md) - zwarty kontekst do dalszej pracy z agentem.
+- [Indeks dokumentacji](docs/WIKI.md)
+- [Architektura i lokalne uruchomienie](docs/architecture.md)
+- [Model danych i API](docs/api.md)
+- [Bezpieczenstwo](docs/security.md)
+- [Testowanie](docs/testing.md)
+- [Operacje, backupy i wdrazanie](docs/operations.md)
+- [Kontekst dla agenta kodujacego](docs/LLM_CONTEXT.md)
 
 ## Status prac
 
@@ -48,6 +53,6 @@ docker compose -f docker/compose.yaml up --build
 
 Compose developerski uruchamia backend na porcie 8000, frontend przez Nginx na porcie 5175 i zapisuje SQLite w external volume `docker_wymiana_data`. Produkcja działa na Hetzner VPS przez `docker/compose.prod.yaml`, wystawia frontend na HTTPS przez Nginx, nie publikuje portu backendu, używa Certbota i ma backupy SQLite.
 
-Testy manualne wszystkich mechanik sa opisane w [scenariuszu end-to-end](docs/WIKI.md#9-test-manualny-end-to-end).
+Instrukcje smoke testu i przeplywow manualnych sa w [Testowaniu](docs/testing.md).
 
 Sekrety i lokalna konfiguracja sa przechowywane poza repozytorium. Nie dodawaj pliku `.env` do commita.
