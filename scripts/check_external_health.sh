@@ -137,6 +137,7 @@ if [[ "$previous_status" == "down" ]]; then
     send_alert \
         "Spindel: produkcja przywrocona" \
         "Publiczne endpointy https://spindel.pl/api/health i https://spindel.pl/nginx-health ponownie odpowiadaja poprawnie z zewnetrznego monitora."
+    write_state "$status_file" "up"
     printf 'Production recovered; recovery alert sent.\n'
 else
     write_state "$status_file" "up"

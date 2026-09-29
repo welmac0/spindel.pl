@@ -10,29 +10,8 @@ cat > "$test_dir/fake-curl" <<'FAKE_CURL'
 #!/usr/bin/env bash
 set -eu
 
-url=""
-payload=""
-while (($#)); do
-    case "$1" in
-        --url|--data-binary|--max-time|--output|--request|--header)
-            option="$1"
-            value="$2"
-            if [[ "$option" == "--url" ]]; then url="$value"; fi
-            if [[ "$option" == "--data-binary" ]]; then payload="$value"; fi
-            shift 2
-            ;;
-        --fail|--silent|--show-error|--location)
-            shift
-            ;;
-        *)
-            url="$1"
-            shift
-            ;;
-    esac
-done
-
-if [[ "$url" == "https://api.brevo.com/v3/smtp/email" ]]; then
-    printf '%s\n' "$payload" >> "$ALERT_LOG"
+if [[ " $* " == *" https://api.brevo.com/v3/smtp/email "* ]]; then
+    printf 'email-alert\n' >> "$ALERT_LOG"
     exit 0
 fi
 
@@ -67,6 +46,9 @@ export MOCK_HEALTH_STATUS="up"
 bash "$MONITOR_SCRIPT" >/dev/null
 [[ "$(cat "$STATE_DIR/status")" == "up" ]]
 [[ "$(cat "$STATE_DIR/consecutive-failures")" == "0" ]]
+[[ "$(wc -l < "$ALERT_LOG" | tr -d ' ')" == "2" ]]
+
+bash "$MONITOR_SCRIPT" >/dev/null
 [[ "$(wc -l < "$ALERT_LOG" | tr -d ' ')" == "2" ]]
 
 printf 'External monitor transition tests passed.\n'
