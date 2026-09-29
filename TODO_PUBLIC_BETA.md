@@ -42,9 +42,8 @@ Checklist przed udostepnieniem aplikacji szerszej grupie uzytkownikow.
 
 ## Priorytet 4: niezawodnosc i obserwowalnosc
 
-- [ ] Dodac niezalezny monitoring zewnetrzny, niezalezny od VPS i systemd.
-- [ ] Ustawic alert dla niedostepnosci HTTPS.
-- [ ] Ustawic alert dla niezdrowego backendu.
+- [ ] Zainstalowac monitor zewnetrzny na Raspberry Pi i sprawdzic alert awarii oraz powrotu uslug.
+- [ ] Potwierdzic alerty HTTPS/backend z zewnetrznego monitora.
 - [ ] Ustawic alert dla nieudanego backupu.
 - [ ] Sprawdzic retencje backupow i okresowo wykonywac test restore.
 - [ ] Ustalic procedure rollbacku do poprzedniego obrazu lub commita.

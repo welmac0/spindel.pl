@@ -1,0 +1,10 @@
+[Unit]
+Description=Run external Spindel production monitor every minute
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+Unit=spindel-external-monitor.service
+
+[Install]
+WantedBy=timers.target

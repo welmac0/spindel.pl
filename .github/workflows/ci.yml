@@ -59,8 +59,14 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Check Bash scripts # Sprawdza składnię wszystkich skryptów .sh. Nie uruchamia ich i nie wysyła maili ani nie wykonuje backupu.
-        run: bash -n scripts/*.sh
+      - name: Check Bash scripts
+        run: |
+          for script in scripts/*.sh tests/*.sh; do
+            bash -n "$script"
+          done
+
+      - name: Test external monitor state transitions
+        run: bash tests/test_external_monitor.sh
 
   compose:
     name: Production Compose config
