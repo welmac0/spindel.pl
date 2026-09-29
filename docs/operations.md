@@ -48,11 +48,11 @@ Uruchom polecenia ponizsze na Raspberry Pi, z katalogu glownego sklonowanego rep
 ```bash
 sudo apt update
 sudo apt install --yes curl python3
-sudo useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin spindel-monitor
+id spindel-monitor >/dev/null 2>&1 || sudo useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin spindel-monitor
 sudo install -d -o root -g spindel-monitor -m 0750 /etc/spindel-monitor
-sudo install -o root -g root -m 0755 scripts/check_external_health.sh /usr/local/sbin/spindel-external-monitor.sh
-sudo install -o root -g root -m 0644 deployment/systemd/spindel-external-monitor.service /etc/systemd/system/
-sudo install -o root -g root -m 0644 deployment/systemd/spindel-external-monitor.timer /etc/systemd/system/
+sudo install -o root -g root -m 0755 /tmp/check_external_health.sh /usr/local/sbin/spindel-external-monitor.sh
+sudo install -o root -g root -m 0644 /tmp/spindel-external-monitor.service /etc/systemd/system/
+sudo install -o root -g root -m 0644 /tmp/spindel-external-monitor.timer /etc/systemd/system/
 sudo nano /etc/spindel-monitor/monitor.env
 ```
 
@@ -79,6 +79,8 @@ sudo journalctl -u spindel-external-monitor.service -n 30 --no-pager
 ```
 
 Timer wykonuje probe po starcie i co minute. Dwie kolejne nieudane kontrole zmieniaja stan na `down` i wysylaja jeden alert; kolejny alert przyjdzie po powrocie obu endpointow. Stan jest w `/var/lib/spindel-external-monitor/`.
+
+Przy aktualizacji skryptu lub jednostek powtorz `scp` tych samych trzech plikow, wykonaj ponownie odpowiednie komendy `sudo install`, a potem `sudo systemctl daemon-reload`; sprawdz log przez `journalctl`. Pliku `monitor.env` nie pobieraj z repo i nie nadpisuj przy aktualizacji.
 
 Testuj bez wylaczania produkcji: na chwile zmien lokalnie w `monitor.env` jeden URL na nieistniejaca sciezke w `https://spindel.pl`, wykonaj dwukrotnie `sudo systemctl start spindel-external-monitor.service`, sprawdz mail i przywroc URL. Po przywroceniu prawidlowych adresow uruchom usluge ponownie i sprawdz alert o powrocie. Nie testuj, zatrzymujac VPS w godzinach uzytkowania.
 
