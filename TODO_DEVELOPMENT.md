@@ -47,7 +47,7 @@ Checklist usprawnien procesu wytwarzania i wdrazania aplikacji.
 ## Priorytet 2: bezpieczenstwo aplikacji
 
 - [ ] Przygotowac krotki threat model: aktywa, role, granice zaufania i scenariusze ataku.
-- [ ] Dodac testy bezpieczenstwa dla auth, CSRF, enumeracji kont i kontroli wlasciciela.
+- [x] Dodac testy bezpieczenstwa dla auth, CSRF, enumeracji kont i kontroli wlasciciela.
 - [ ] Dodac skanowanie zaleznosci Pythona i npm w CI.
 - [ ] Dodac skanowanie obrazow Dockerowych pod katem znanych podatnosci.
 - [ ] Udokumentowac kompromisy: SQLite, rate limiting in-memory i pojedynczy VPS.

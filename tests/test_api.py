@@ -41,6 +41,9 @@ def client(monkeypatch):
     monkeypatch.setattr(main, "send_exchange_confirmed_email", lambda **kwargs: None)
     monkeypatch.setattr(main, "send_password_reset_email", lambda **kwargs: None)
     with TestClient(app, base_url="http://localhost") as test_client:
+        csrf_response = test_client.get("/csrf")
+        assert csrf_response.status_code == 200
+        test_client.headers["X-CSRF-Token"] = csrf_response.json()["csrf_token"]
         yield test_client, engine
     app.dependency_overrides.clear()
 
@@ -68,7 +71,13 @@ def login(client: TestClient, email: str):
         json={"email": email, "password": "correct horse battery staple"},
     )
     assert response.status_code == 200
-    return {"Authorization": f"Bearer {response.json()['access_token']}"}
+    session_cookie = response.cookies.get(main.SESSION_COOKIE_NAME)
+    csrf_cookie = client.cookies.get(main.CSRF_COOKIE_NAME)
+    assert session_cookie and csrf_cookie
+    return {
+        "Cookie": f"{main.SESSION_COOKIE_NAME}={session_cookie}; {main.CSRF_COOKIE_NAME}={csrf_cookie}",
+        "X-CSRF-Token": csrf_cookie,
+    }
 
 
 def listing_payload():
@@ -119,10 +128,99 @@ def test_cors_allows_configured_development_origin(client):
         headers={
             "Origin": "http://localhost:3000",
             "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "x-csrf-token",
         },
     )
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+    assert response.headers["access-control-allow-credentials"] == "true"
+    assert "x-csrf-token" in response.headers["access-control-allow-headers"].lower()
+
+
+def test_login_uses_httponly_secure_lax_cookie_without_returning_token(client, monkeypatch):
+    test_client, engine = client
+    register_and_verify(test_client, engine, "12345678@pw.edu.pl", "123456")
+    monkeypatch.setattr(main, "SESSION_COOKIE_SECURE", True)
+
+    response = test_client.post(
+        "/login",
+        json={"email": "12345678@pw.edu.pl", "password": "correct horse battery staple"},
+    )
+
+    assert response.status_code == 200
+    assert "access_token" not in response.json()
+    cookie = response.headers["set-cookie"].lower()
+    assert f"{main.SESSION_COOKIE_NAME}=" in cookie
+    assert "httponly" in cookie
+    assert "secure" in cookie
+    assert "samesite=lax" in cookie
+
+
+def test_state_changing_request_rejects_invalid_csrf_token(client):
+    test_client, _ = client
+    response = test_client.post(
+        "/register",
+        json={
+            "email": "12345678@pw.edu.pl",
+            "index_number": "123456",
+            "password": "correct horse battery staple",
+        },
+        headers={"X-CSRF-Token": "not-the-cookie-token"},
+    )
+    assert response.status_code == 403
+    assert response.json() == {"detail": "CSRF validation failed"}
+
+
+def test_state_changing_request_rejects_untrusted_origin(client):
+    test_client, _ = client
+    csrf_token = test_client.cookies.get(main.CSRF_COOKIE_NAME)
+    response = test_client.post(
+        "/register",
+        json={
+            "email": "12345678@pw.edu.pl",
+            "index_number": "123456",
+            "password": "correct horse battery staple",
+        },
+        headers={
+            "Origin": "https://attacker.example",
+            "X-CSRF-Token": csrf_token,
+        },
+    )
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Request origin is not allowed"}
+
+
+def test_logout_expires_cookie_and_invalidates_session(client):
+    test_client, engine = client
+    register_and_verify(test_client, engine, "12345678@pw.edu.pl", "123456")
+    session_headers = login(test_client, "12345678@pw.edu.pl")
+
+    logout = test_client.post("/logout", headers=session_headers)
+
+    assert logout.status_code == 204
+    assert "max-age=0" in logout.headers["set-cookie"].lower()
+    assert test_client.post(
+        "/listings", json=listing_payload(), headers=session_headers
+    ).status_code == 401
+    with Session(engine) as session:
+        user = session.exec(select(User).where(User.email == "12345678@pw.edu.pl")).one()
+        assert user.auth_token_hash is None
+        assert user.auth_token_expires_at is None
+
+
+def test_expired_session_cookie_is_rejected(client):
+    test_client, engine = client
+    register_and_verify(test_client, engine, "12345678@pw.edu.pl", "123456")
+    session_headers = login(test_client, "12345678@pw.edu.pl")
+    with Session(engine) as session:
+        user = session.exec(select(User).where(User.email == "12345678@pw.edu.pl")).one()
+        user.auth_token_expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+        session.add(user)
+        session.commit()
+
+    response = test_client.get("/me/listings", headers=session_headers)
+
+    assert response.status_code == 401
 
 
 def test_unknown_host_is_rejected(client):

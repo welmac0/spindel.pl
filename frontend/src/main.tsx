@@ -3,6 +3,39 @@ import { createRoot } from "react-dom/client";
 import { ArrowRight, ChevronLeft, ChevronRight, Filter, LogIn, Plus, Search, X } from "lucide-react";
 import "./styles.css";
 
+let csrfToken: string | null = null;
+let csrfTokenPromise: Promise<string> | null = null;
+
+async function ensureCsrfToken(): Promise<string> {
+  if (csrfToken) return csrfToken;
+  if (!csrfTokenPromise) {
+    csrfTokenPromise = fetch("/api/csrf", { credentials: "same-origin" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Could not initialize request protection.");
+        const data = await response.json() as { csrf_token: string };
+        csrfToken = data.csrf_token;
+        return csrfToken;
+      })
+      .finally(() => { csrfTokenPromise = null; });
+  }
+  return csrfTokenPromise;
+}
+
+async function apiFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  const method = (init.method ?? "GET").toUpperCase();
+  const headers = new Headers(init.headers);
+  if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+    headers.set("X-CSRF-Token", await ensureCsrfToken());
+  }
+  const response = await fetch(input, {
+    ...init,
+    headers,
+    credentials: init.credentials ?? "same-origin",
+  });
+  if (response.status === 401) window.dispatchEvent(new Event("spindel:unauthorized"));
+  return response;
+}
+
 type Listing = {
   id: number;
   major: "mat" | "iisi" | "iad" | "mad" | "cs";
@@ -98,7 +131,6 @@ function daysAgoLabel(createdAt: string, language: "pl" | "en"): string {
 function App() {
   const [language, setLanguage] = useState<"pl" | "en">("pl");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [accessToken, setAccessToken] = useState("");
   const [authMode, setAuthMode] = useState<"login" | "register" | "reset-request" | "reset-confirm" | "resend-verification" | null>(null);
   const [authForm, setAuthForm] = useState({ email: "", indexNumber: "", password: "" });
   const [resetToken, setResetToken] = useState("");
@@ -132,12 +164,10 @@ function App() {
   const maintenanceMode = import.meta.env.VITE_MAINTENANCE === "true";
 
   useEffect(() => {
-    const savedToken = window.localStorage.getItem("spindel_access_token");
+    let cancelled = false;
+    const handleUnauthorized = () => setIsLoggedIn(false);
+    window.addEventListener("spindel:unauthorized", handleUnauthorized);
     const urlToken = new URLSearchParams(window.location.search).get("token");
-    if (savedToken) {
-      setAccessToken(savedToken);
-      setIsLoggedIn(true);
-    }
     if (urlToken && window.location.pathname === "/reset-password") {
       setResetToken(urlToken);
       setAuthMode("reset-confirm");
@@ -145,7 +175,7 @@ function App() {
     }
     if (urlToken && window.location.pathname === "/verify") {
       window.history.replaceState({}, "", "/verify");
-      fetch(`/api/verify?token=${encodeURIComponent(urlToken)}`)
+      apiFetch(`/api/verify?token=${encodeURIComponent(urlToken)}`)
         .then(async (response) => {
           if (!response.ok) {
             const data = await response.json().catch(() => null);
@@ -156,10 +186,19 @@ function App() {
         })
         .catch((error) => setToast(error instanceof Error ? error.message : "Nie udało się potwierdzić emaila."));
     }
+    void (async () => {
+      await ensureCsrfToken();
+      const response = await apiFetch("/api/me/listings");
+      if (response.ok && !cancelled) setIsLoggedIn(true);
+    })().catch(() => undefined);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("spindel:unauthorized", handleUnauthorized);
+    };
   }, []);
 
   const reloadListings = async () => {
-    const response = await fetch("/api/listings");
+    const response = await apiFetch("/api/listings");
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json() as Array<Record<string, unknown>>;
     setListings(data.map(mapListing));
@@ -182,7 +221,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/stats")
+    apiFetch("/api/stats")
       .then((response) => response.ok ? response.json() : Promise.reject())
       .then((data: { fulfilled_exchanges: number }) => setFulfilledExchanges(data.fulfilled_exchanges))
       .catch(() => setFulfilledExchanges(null));
@@ -260,13 +299,11 @@ function App() {
       ? { email: authForm.email, password: authForm.password }
       : { email: authForm.email, index_number: authForm.indexNumber, password: authForm.password };
     try {
-      const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const response = await apiFetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const data = await response.json();
       if (!response.ok) throw new Error(formatApiError(data.detail, "Nie udało się wykonać operacji."));
       if (authMode === "login") {
-        setAccessToken(data.access_token);
         setIsLoggedIn(true);
-        window.localStorage.setItem("spindel_access_token", data.access_token);
         setAuthMode(null);
       } else {
         setAuthMode(null);
@@ -286,7 +323,7 @@ function App() {
     const isResetRequest = authMode === "reset-request";
     const endpoint = isResetRequest ? "/api/password-reset/request" : "/api/resend-verification";
     try {
-      const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: authForm.email }) });
+      const response = await apiFetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: authForm.email }) });
       const data = response.status === 204 ? null : await response.json();
       if (!response.ok) throw new Error(formatApiError(data?.detail, "Nie udało się wykonać operacji."));
       setAuthMode(null);
@@ -303,7 +340,7 @@ function App() {
     setAuthBusy(true);
     setAuthError("");
     try {
-      const response = await fetch("/api/password-reset/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: resetToken, password: authForm.password }) });
+      const response = await apiFetch("/api/password-reset/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: resetToken, password: authForm.password }) });
       if (!response.ok) {
         const data = await response.json();
         throw new Error(formatApiError(data.detail, "Link resetu jest nieprawidłowy lub wygasł."));
@@ -319,15 +356,12 @@ function App() {
   };
 
   const requestExchange = async (listingId: number) => {
-    if (!isLoggedIn || !accessToken) {
+    if (!isLoggedIn) {
       setToast(language === "pl" ? "Zaloguj się lub załóż konto, aby wysłać zgłoszenie." : "Log in or create an account to send a request.");
       return;
     }
     try {
-      const response = await fetch(`/api/listings/${listingId}/requests`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      const response = await apiFetch(`/api/listings/${listingId}/requests`, { method: "POST" });
       const data = await response.json();
       if (!response.ok) throw new Error(formatApiError(data.detail, "Nie udało się wysłać zgłoszenia."));
       setSelectedListing(null);
@@ -340,12 +374,10 @@ function App() {
 
   const loadExchangeRequests = async () => {
     try {
-      const response = await fetch("/api/me/exchange-requests", { headers: { Authorization: `Bearer ${accessToken}` } });
+      const response = await apiFetch("/api/me/exchange-requests");
       const data = await response.json();
       if (response.status === 401) {
         setIsLoggedIn(false);
-        setAccessToken("");
-        window.localStorage.removeItem("spindel_access_token");
       }
       if (!response.ok) throw new Error(formatApiError(data.detail, "Nie udało się pobrać wymian."));
       setExchangeRequests(data.map((request: ExchangeRequest & { listing?: Record<string, unknown> | null }) => ({
@@ -364,7 +396,7 @@ function App() {
   };
 
   const loadMyListings = async () => {
-    const response = await fetch("/api/me/listings", { headers: { Authorization: `Bearer ${accessToken}` } });
+    const response = await apiFetch("/api/me/listings");
     if (!response.ok) throw new Error(language === "pl" ? "Nie udało się pobrać własnych ogłoszeń." : "Could not load your listings.");
     const data = await response.json() as Array<Record<string, unknown>>;
     setMyListings(data.map(mapListing));
@@ -377,7 +409,7 @@ function App() {
     if (!window.confirm(question)) return;
     setExchangeBusy(true);
     try {
-      const response = await fetch(`/api/exchange-requests/${requestId}/${action}`, { method: "POST", headers: { Authorization: `Bearer ${accessToken}` } });
+      const response = await apiFetch(`/api/exchange-requests/${requestId}/${action}`, { method: "POST" });
       const data = await response.json();
       if (!response.ok) throw new Error(formatApiError(data.detail, "Operacja nie powiodła się."));
       setToast(action === "confirm" ? "Wymiana potwierdzona." : "Ogłoszenie anulowane.");
@@ -395,7 +427,7 @@ function App() {
     if (!window.confirm("Anulować to ogłoszenie? Nie będzie już widoczne na liście.")) return;
     setExchangeBusy(true);
     try {
-      const response = await fetch(`/api/listings/${listingId}/cancel`, { method: "POST", headers: { Authorization: `Bearer ${accessToken}` } });
+      const response = await apiFetch(`/api/listings/${listingId}/cancel`, { method: "POST" });
       const data = await response.json();
       if (!response.ok) throw new Error(formatApiError(data.detail, "Nie udało się anulować ogłoszenia."));
       setToast("Ogłoszenie anulowane.");
@@ -406,6 +438,19 @@ function App() {
       setToast(error instanceof Error ? error.message : "Nie udało się anulować ogłoszenia.");
     } finally {
       setExchangeBusy(false);
+    }
+  };
+
+  const logout = async () => {
+    try {
+      const response = await apiFetch("/api/logout", { method: "POST" });
+      if (!response.ok) throw new Error("Nie udało się wylogować.");
+      setIsLoggedIn(false);
+      setExchangeRequests([]);
+      setMyListings([]);
+      setExchangeOpen(false);
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Nie udało się wylogować.");
     }
   };
 
@@ -437,7 +482,7 @@ function App() {
           </button>
           {isLoggedIn ? (
             <>
-              <button className="text-button" onClick={() => { setIsLoggedIn(false); setAccessToken(""); window.localStorage.removeItem("spindel_access_token"); }}>{copy.logout}</button>
+              <button className="text-button" onClick={logout}>{copy.logout}</button>
                           <button className="outline-button compact" onClick={loadExchangeRequests}>Moje wymiany</button>
               <button className="primary-button compact" onClick={() => { setStep(1); setAddOpen(true); }}>
                 <Plus size={17} /> {copy.add}
@@ -531,7 +576,7 @@ function App() {
           {step === 1 && <div className="filter-fields"><label>{copy.direction}<select value={newListing.major} onChange={(event) => setNewListing({ ...newListing, major: event.target.value as Listing["major"] })}><option value="mat">{majorLabels[language].mat}</option><option value="iisi">{majorLabels[language].iisi}</option><option value="iad">{majorLabels[language].iad}</option><option value="mad">{majorLabels[language].mad}</option><option value="cs">{majorLabels[language].cs}</option></select></label><label>{copy.semester}<select value={newListing.semester} onChange={(event) => setNewListing({ ...newListing, semester: event.target.value })}>{Array.from({ length: 14 }, (_, index) => <option key={index + 1}>{index + 1}</option>)}</select></label></div>}
           {step === 2 && <div className="filter-fields"><label>{copy.subject}<input value={newListing.subject} onChange={(event) => setNewListing({ ...newListing, subject: event.target.value })} placeholder={copy.subjectPlaceholder} /></label><label>{copy.classType}<select value={newListing.classType} onChange={(event) => setNewListing({ ...newListing, classType: event.target.value as Listing["classType"] })}><option value="tutorial">{classTypeLabels[language].tutorial}</option><option value="labs">{classTypeLabels[language].labs}</option><option value="project">{classTypeLabels[language].project}</option></select></label></div>}
           {step === 3 && <div className="filter-fields"><label>{copy.haveGroup}<input value={newListing.groupHave} onChange={(event) => setNewListing({ ...newListing, groupHave: event.target.value })} placeholder="np. 12" required /></label><label>{copy.wantGroup}<input value={newListing.groupWant} onChange={(event) => setNewListing({ ...newListing, groupWant: event.target.value })} placeholder="np. 14, 15, 16" required />{newListing.groupWant && (!newListing.groupHave.trim() || !parseGroups(newListing.groupWant).length || parseGroups(newListing.groupWant).includes(newListing.groupHave.trim())) && <small className="field-error">{language === "pl" ? "Podaj różne grupy." : "Enter different groups."}</small>}</label></div>}
-          <div className="dialog-actions"><button className="text-button" onClick={() => step === 1 ? setAddOpen(false) : setStep(step - 1)}>{step === 1 ? copy.cancelLabel : <><ChevronLeft size={17} /> {copy.backLabel}</>}</button>{step < 3 ? <button className="primary-button" disabled={step === 2 && !newListing.subject.trim()} onClick={() => setStep(step + 1)}>{copy.nextLabel} <ChevronRight size={17} /></button> : <button className="primary-button" disabled={!groupFormValid} onClick={async () => { try { const response = await fetch("/api/listings", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ major: newListing.major, semester: Number(newListing.semester), subject: newListing.subject.trim(), class_type: newListing.classType, group_have: newListing.groupHave.trim(), group_want: parseGroups(newListing.groupWant) }) }); const data = await response.json(); if (!response.ok) throw new Error(formatApiError(data.detail, language === "pl" ? "Nie udało się opublikować ogłoszenia." : "Could not publish the listing.")); await reloadListings(); setFilters(defaultFilters); setDraftFilters(defaultFilters); setAddOpen(false); setStep(1); setToast(language === "pl" ? "Ogłoszenie opublikowane." : "Listing published."); } catch (error) { setToast(error instanceof Error ? error.message : (language === "pl" ? "Nie udało się opublikować ogłoszenia." : "Could not publish the listing.")); } }}>{copy.publishLabel}</button>}</div>
+          <div className="dialog-actions"><button className="text-button" onClick={() => step === 1 ? setAddOpen(false) : setStep(step - 1)}>{step === 1 ? copy.cancelLabel : <><ChevronLeft size={17} /> {copy.backLabel}</>}</button>{step < 3 ? <button className="primary-button" disabled={step === 2 && !newListing.subject.trim()} onClick={() => setStep(step + 1)}>{copy.nextLabel} <ChevronRight size={17} /></button> : <button className="primary-button" disabled={!groupFormValid} onClick={async () => { try { const response = await apiFetch("/api/listings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ major: newListing.major, semester: Number(newListing.semester), subject: newListing.subject.trim(), class_type: newListing.classType, group_have: newListing.groupHave.trim(), group_want: parseGroups(newListing.groupWant) }) }); const data = await response.json(); if (!response.ok) throw new Error(formatApiError(data.detail, language === "pl" ? "Nie udało się opublikować ogłoszenia." : "Could not publish the listing.")); await reloadListings(); setFilters(defaultFilters); setDraftFilters(defaultFilters); setAddOpen(false); setStep(1); setToast(language === "pl" ? "Ogłoszenie opublikowane." : "Listing published."); } catch (error) { setToast(error instanceof Error ? error.message : (language === "pl" ? "Nie udało się opublikować ogłoszenia." : "Could not publish the listing.")); } }}>{copy.publishLabel}</button>}</div>
         </section>
       </div>}
 

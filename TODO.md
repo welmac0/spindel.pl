@@ -71,7 +71,7 @@ Backup produkcyjny uzywa systemd timera co 6 godzin i kopiuje baze z external vo
 - [x] Wdrozyc HTTPS i przekierowanie HTTP -> HTTPS.
 - [x] Dodac `Referrer-Policy: no-referrer` w produkcyjnym Nginx.
 - [x] Usuwac tokeny verify/reset z adresu po ich odczytaniu.
-- [ ] Rozwazyc przeniesienie sesji z `localStorage` do ciasteczka `HttpOnly`, `Secure`, `SameSite`.
+- [x] Przeniesc sesje do ciasteczka `HttpOnly`, `Secure` na produkcji, `SameSite=Lax`; dodac CSRF.
 - [x] Dodac limity rate limitingu dla tworzenia ogloszen, requestow wymian, anulowania i potwierdzania.
 - [x] Dodac limity dlugosci loginu oraz liczby i rozmiaru elementow `group_want`.
 - [x] Ujednolicic odpowiedzi rejestracji i resend, aby nie ujawniac istnienia kont.
@@ -91,7 +91,7 @@ Backup produkcyjny uzywa systemd timera co 6 godzin i kopiuje baze z external vo
 
 | Temat | Opis | Krytycznosc |
 |---|---|---|
-| Sesja HttpOnly | Zastapic token w `localStorage` ciasteczkiem `HttpOnly`, `Secure`, `SameSite` i dodac ochrone CSRF. | Wysoka przed wieksza beta |
+| Sesja HttpOnly | Zastapiono token w `localStorage` ciasteczkiem `HttpOnly`, `Secure` na produkcji i `SameSite=Lax`; CSRF jest wymagany dla metod zmieniajacych stan. | Zrobione |
 | Enumeracja kont | Odpowiedzi rejestracji i resend sa neutralne; rate limiting pozostaje aktywny. | Zrobione |
 | Zewnetrzny monitoring | Dodac monitoring niezalezny od VPS i jego systemd. | Niska |
 | Migracje | Dodac migracje schematu, np. Alembic. | Srednia |

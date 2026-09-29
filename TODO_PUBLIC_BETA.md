@@ -4,11 +4,11 @@ Checklist przed udostepnieniem aplikacji szerszej grupie uzytkownikow.
 
 ## Priorytet 1: bezpieczenstwo sesji
 
-- [ ] Przeniesc token sesji z `localStorage` do ciasteczka `HttpOnly`.
-- [ ] Ustawic dla ciasteczka `Secure` i `SameSite=Lax` albo `SameSite=Strict`.
-- [ ] Dodac ochrone CSRF dla operacji zmieniajacych dane.
-- [ ] Dodac testy logowania, wylogowania, wygasania sesji i CSRF.
-- [ ] Sprawdzic, ze token sesji nie pojawia sie w URL, logach ani odpowiedziach frontendu.
+- [x] Przeniesc token sesji z `localStorage` do ciasteczka `HttpOnly`.
+- [x] Ustawic dla ciasteczka `Secure` na produkcji i `SameSite=Lax`.
+- [x] Dodac ochrone CSRF dla operacji zmieniajacych dane.
+- [x] Dodac testy logowania, wylogowania, wygasania sesji i CSRF.
+- [x] Sprawdzic, ze token sesji nie pojawia sie w URL, logach ani odpowiedziach frontendu.
 
 ## Priorytet 2: wdrozenie produkcyjne
 

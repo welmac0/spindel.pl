@@ -17,9 +17,9 @@ Zaimplementowane:
 - Weryfikacja emaila przez Brevo Transactional API.
 - Token aktywacyjny wazny 7 dni.
 - Ponowienie maila weryfikacyjnego po wygasnieciu albo po bledzie wysylki.
-- Logowanie przez Bearer token wazny 7 dni.
+- Logowanie przez siedmiodniowe cookie sesyjne `HttpOnly`, `SameSite=Lax` i `Secure` na produkcji.
 - Reset hasla z jednorazowym tokenem waznym 1 godzine.
-- Uniewaznianie aktywnych Bearer tokenow po zmianie hasla.
+- Uniewaznianie aktywnych sesji po zmianie hasla i wylogowaniu.
 - Publiczna lista aktywnych ogloszen.
 - Wlasciciel ogloszenia i kontrola praw do edycji/usuwania.
 - Zgloszenie do ogloszenia tylko przy statusie `active`.
@@ -32,12 +32,13 @@ Zaimplementowane:
 - Logowanie aplikacji przez standardowy logger na stdout.
 - Endpoint `GET /health` sprawdzajacy dostep do bazy.
 - Frontend React/Vite: logowanie, rejestracja, listingi, filtry, tworzenie ogloszen i panel wymian.
-- Trwala sesja frontendu przez `localStorage` do czasu wylogowania albo wygasniecia tokenu.
+- Sesja przegladarki przez cookie `HttpOnly`; token nie jest dostepny dla JavaScript ani przechowywany w `localStorage`.
+- Ochrona CSRF wszystkich metod `POST`, `PUT`, `PATCH` i `DELETE` przez token double-submit.
 - Frontendowe formularze resetu hasla i ponowienia weryfikacji emaila.
 - Wieloetapowy Dockerfile frontendu: Node buduje aplikacje, Nginx serwuje `dist`.
 - Compose z backendem, frontendem, named volume SQLite, healthcheckami i zaleznoscia `service_healthy`.
 - Nginx przekazuje `/api/...` do uslugi `backend`, a pozostale sciezki serwuje jako SPA.
-- 29 testow automatycznych.
+- Automatyczne testy backendowe dla auth, cookie sesyjnego, wylogowania i CSRF.
 
 Niezaimplementowane:
 
@@ -162,9 +163,17 @@ Body:
 
 Zwraca neutralny komunikat i `200`, takze dla nieznanego, juz zweryfikowanego albo chwilowo zablokowanego konta. Nowy mail mozna wyslac po wygasnieciu poprzedniego udanego maila. Po `failed` mozna probowac od razu. Limit: `3/hour` na IP.
 
+#### `GET /csrf`
+
+Ustawia cookie `spindel_csrf` (`SameSite=Lax`, `Secure` na produkcji) i zwraca token w JSON. Frontend przekazuje jego wartosc w naglowku `X-CSRF-Token` przy kazdym `POST`, `PUT`, `PATCH` i `DELETE`. Backend sprawdza zgodnosc cookie i naglowka, a jesli request ma naglowek `Origin`, porownuje z originem hosta/serwera proxy lub lista `ALLOWED_ORIGINS`. Brak tokenu, niezgodnosc lub nieautoryzowany origin zwraca `403`.
+
 #### `POST /login`
 
-Zwraca Bearer token wazny 7 dni. Dostep tylko dla zweryfikowanych kont. Limit: `10/minute` na IP.
+Dostep tylko dla zweryfikowanych kont. Ustawia cookie `spindel_session` wazne 7 dni z flagami `HttpOnly`, `SameSite=Lax` i `Secure` na produkcji. Surowy token nie jest zwracany w JSON. Limit: `10/minute` na IP.
+
+#### `POST /logout`
+
+Wymaga aktywnej sesji i tokenu CSRF. Uniewaznia sesje po stronie serwera i wygasza cookie sesyjne. Zwraca `204`.
 
 #### `POST /password-reset/request`
 
@@ -187,13 +196,13 @@ Body:
 }
 ```
 
-Token jest jednorazowy. Po zmianie hasla obecny Bearer zostaje uniewazniony. Limit: `10/hour` na IP.
+Token jest jednorazowy. Po zmianie hasla biezaca sesja cookie zostaje uniewazniona. Limit: `10/hour` na IP.
 
 ### Ogloszenia
 
 #### `POST /listings`
 
-Wymaga Bearer. Tworzy ogloszenie nalezace do zalogowanego uzytkownika. Nie mozna tworzyc ogloszen w czasie 4-dniowego cooldownu.
+Wymaga sesji cookie i prawidlowego tokenu CSRF. Tworzy ogloszenie nalezace do zalogowanego uzytkownika. Nie mozna tworzyc ogloszen w czasie 4-dniowego cooldownu.
 
 Jeden uzytkownik moze miec maksymalnie 8 ogloszen w statusie `active` albo `pending`. Po osiagnieciu limitu endpoint zwraca `409`.
 
@@ -211,11 +220,11 @@ Publiczne. Ogloszenia `pending`, `fulfilled`, `stale` i `cancelled` sa niewidocz
 
 #### `PATCH /listings/{listing_id}`
 
-Wymaga Bearer wlasciciela. Statusu nie mozna zmienic przez PATCH. Grupy `group_have` i `group_want` musza byc rozne.
+Wymaga sesji cookie, tokenu CSRF i bycia wlascicielem. Statusu nie mozna zmienic przez PATCH. Grupy `group_have` i `group_want` musza byc rozne.
 
 #### `DELETE /listings/{listing_id}`
 
-Wymaga Bearer wlasciciela. Zwraca `204`.
+Wymaga sesji cookie, tokenu CSRF i bycia wlascicielem. Zwraca `204`.
 
 ### Wymiana
 
@@ -229,29 +238,29 @@ Odrzucenie nie tworzy statusu `rejected` dla ogloszenia. Pokazuje monit o anulow
 
 #### `POST /listings/{listing_id}/requests`
 
-Wymaga Bearer uzytkownika innego niz wlasciciel. Przejscie jest dozwolone tylko dla `active`. W jednej operacji bazodanowej ogloszenie jest zmieniane na `pending`; drugi request nie przejdzie.
+Wymaga sesji cookie i tokenu CSRF, a uzytkownik nie moze byc wlascicielem ogloszenia. Przejscie jest dozwolone tylko dla `active`. W jednej operacji bazodanowej ogloszenie jest zmieniane na `pending`; drugi request nie przejdzie.
 
 Okno potwierdzenia: 48 godzin.
 
 #### `GET /listings/{listing_id}/requests`
 
-Wymaga Bearer wlasciciela ogloszenia.
+Wymaga sesji cookie i bycia wlascicielem ogloszenia.
 
 #### `POST /exchange-requests/{request_id}/confirm`
 
-Wymaga Bearer wlasciciela. Zmienia zgloszenie na `confirmed`, a ogloszenie na `fulfilled`. Obie osoby dostaja mail z krotkim opisem dopasowania i emailem drugiej osoby; kontakty sa ujawniane dopiero po potwierdzeniu.
+Wymaga sesji cookie i tokenu CSRF wlasciciela. Zmienia zgloszenie na `confirmed`, a ogloszenie na `fulfilled`. Obie osoby dostaja mail z krotkim opisem dopasowania i emailem drugiej osoby; kontakty sa ujawniane dopiero po potwierdzeniu.
 
 #### `POST /exchange-requests/{request_id}/reject`
 
-Wymaga Bearer wlasciciela. Zgloszenie dostaje `cancelled`, a ogloszenie `cancelled`. Nie ma statusu ogloszenia `rejected`: odrzucenie oznacza, ze ogloszenie przestalo byc aktualne.
+Wymaga sesji cookie i tokenu CSRF wlasciciela. Zgloszenie dostaje `cancelled`, a ogloszenie `cancelled`. Nie ma statusu ogloszenia `rejected`: odrzucenie oznacza, ze ogloszenie przestalo byc aktualne.
 
 #### `POST /listings/{listing_id}/cancel`
 
-Wymaga Bearer wlasciciela. Anuluje ogloszenie ze statusu `active` albo `pending`, zachowujac historie.
+Wymaga sesji cookie i tokenu CSRF wlasciciela. Anuluje ogloszenie ze statusu `active` albo `pending`, zachowujac historie.
 
 #### `GET /me/exchange-requests`
 
-Wymaga Bearer. Zwraca wyslane przez uzytkownika zgloszenia oraz zgloszenia do jego ogloszen. Frontend pokazuje je jako `Wyslane`, `Otrzymane` i `Zakonczone`.
+Wymaga sesji cookie. Zwraca wyslane przez uzytkownika zgloszenia oraz zgloszenia do jego ogloszen. Frontend pokazuje je jako `Wyslane`, `Otrzymane` i `Zakonczone`.
 
 ### Pozostale
 
@@ -265,7 +274,7 @@ Sprawdza, czy aplikacja dziala i czy sesja moze wykonac proste zapytanie do SQLi
 
 ### Endpointy chronione
 
-Kazdy z ponizszych endpointow wymaga naglowka `Authorization: Bearer <token>` uzyskanego przez `POST /login`:
+Kazdy z ponizszych endpointow wymaga cookie sesyjnego ustawionego przez `POST /login`:
 
 - `POST /listings`
 - `PATCH /listings/{listing_id}`
@@ -278,7 +287,7 @@ Kazdy z ponizszych endpointow wymaga naglowka `Authorization: Bearer <token>` uz
 - `GET /me/exchange-requests`
 - `GET /me/listings`
 
-W Swaggerze kliknij `Authorize`, wpisz `Bearer <access_token>` i dopiero wtedy wykonuj te operacje. Publiczne sa `GET /listings`, `GET /listings/{listing_id}`, `GET /enums`, `GET /health` oraz linkowe `GET /verify` i `GET /reset-password`.
+Przegladarka wysyla cookie automatycznie; przed wywolaniem metod modyfikujacych dane klient musi pobrac `GET /csrf` i dolaczyc wartosc tokenu jako `X-CSRF-Token`. Publiczne sa odczyty listingow, `GET /enums`, `GET /health`, `GET /stats` oraz linkowe `GET /verify` i `GET /reset-password`.
 
 ## 6. Modele i statusy
 
@@ -320,8 +329,10 @@ Logi techniczne sa wysylane na stdout. Przy uruchomieniu przez systemd beda dost
 Zastosowane:
 
 - hasla hashowane przez `scrypt` z losowa sola,
-- tokeny resetu i weryfikacji generowane przez `secrets.token_urlsafe`,
-- w bazie sa tylko hashe tokenow auth/reset; token weryfikacji jest obecnie jeszcze przechowywany jawnie i powinien zostac zahashowany przed produkcja,
+- tokeny resetu, weryfikacji, sesji i CSRF generowane przez `secrets.token_urlsafe`,
+- tokeny resetu, weryfikacji i sesji sa przechowywane w bazie wylacznie jako hashe,
+- cookie sesyjne `HttpOnly`, `SameSite=Lax`, siedmiodniowe oraz `Secure` na produkcji,
+- ochrona CSRF przez double-submit cookie, naglowek `X-CSRF-Token` i walidacje `Origin` dla metod zmieniajacych stan,
 - neutralna odpowiedz resetu hasla,
 - jednorazowy reset hasla,
 - uniewaznienie sesji po zmianie hasla,
@@ -329,12 +340,10 @@ Zastosowane:
 - walidacja wlasciciela i statusu ogloszenia,
 - dane sekretne poza repozytorium.
 
-Ograniczenia przed produkcja:
+Ograniczenia i ryzyka produkcyjne:
 
 - limiter korzysta z pamieci procesu; przy wielu workerach potrzebny jest Redis lub limitowanie na proxy/WAF,
-- aplikacja nie ma jeszcze HTTPS i konfiguracji reverse proxy,
 - SQLite nie jest docelowa baza dla wiekszego wdrozenia,
-- token weryfikacyjny jest przechowywany tylko jako hash,
 - brak migracji Alembic.
 
 ## 8. Testy
@@ -364,21 +373,23 @@ W lokalnej bazie developerskiej moze istniec konto testowe B utworzone poza kode
 
 ### A. Rejestracja i weryfikacja
 
-1. W profilu A wybierz `Zaloz konto`.
-2. Uzyj formatu emaila `12345678@pw.edu.pl`, szesciocyfrowego numeru indeksu i hasla o dlugosci co najmniej 8 znakow.
-3. Sprawdz, ze konto zostalo utworzone i pojawil sie komunikat o weryfikacji emaila.
-4. Przed weryfikacja sprobuj sie zalogowac. Oczekiwany rezultat: `403`, konto nie moze wejsc do aplikacji.
-5. Otworz link `/verify?token=...` z maila. Oczekiwany rezultat: `200`.
-6. Otworz ten sam link drugi raz. Oczekiwany rezultat: blad, bo token jest jednorazowy.
-7. Sprawdz link wygasly po 7 dniach w testach API albo przez przygotowanie rekordu w bazie. Oczekiwany rezultat: `410`.
+1. Frontend pobiera token przez `GET /csrf`; metody modyfikujace dane wysylaja go w naglowku `X-CSRF-Token`.
+2. W profilu A wybierz `Zaloz konto`.
+3. Uzyj formatu emaila `12345678@pw.edu.pl`, szesciocyfrowego numeru indeksu i hasla o dlugosci co najmniej 8 znakow.
+4. Sprawdz, ze konto zostalo utworzone i pojawil sie komunikat o weryfikacji emaila.
+5. Przed weryfikacja sprobuj sie zalogowac. Oczekiwany rezultat: `403`, konto nie moze wejsc do aplikacji.
+6. Otworz link `/verify?token=...` z maila. Oczekiwany rezultat: `200`.
+7. Otworz ten sam link drugi raz. Oczekiwany rezultat: blad, bo token jest jednorazowy.
+8. Sprawdz link wygasly po 7 dniach w testach API albo przez przygotowanie rekordu w bazie. Oczekiwany rezultat: `410`.
 
-### B. Logowanie i trwala sesja
+### B. Logowanie i sesja cookie
 
 1. Zaloguj konto A poprawnym haslem. Oczekiwany rezultat: pojawia sie przycisk `Moje wymiany` i `Dodaj ogloszenie`.
-2. Odswiez strone. Uzytkownik powinien nadal byc zalogowany, bo token jest zapisany w `localStorage`.
-3. Wyloguj sie. Oczekiwany rezultat: token znika z `localStorage`, przyciski konta wracaja do `Zaloguj` i `Zaloz konto`.
+2. Odswiez strone. Uzytkownik powinien nadal byc zalogowany dzieki cookie sesyjnemu.
+3. Wyloguj sie. Oczekiwany rezultat: frontend wywoluje `POST /logout`, cookie jest wygaszone, a przyciski konta wracaja do `Zaloguj` i `Zaloz konto`.
 4. Sprobuj zalogowac sie zlym haslem. Oczekiwany rezultat: `401`, bez utworzenia sesji.
-5. Sprobuj dostepu do chronionego endpointu bez Bearera. Oczekiwany rezultat: `401`.
+5. Sprobuj dostepu do chronionego endpointu bez sesji. Oczekiwany rezultat: `401`.
+6. Sprobuj wyslac operacje zmieniajaca dane z brakujacym lub blednym `X-CSRF-Token`. Oczekiwany rezultat: `403`.
 
 ### C. Reset hasla i ponowienie weryfikacji
 
@@ -397,7 +408,7 @@ W lokalnej bazie developerskiej moze istniec konto testowe B utworzone poza kode
 3. Otworz filtry i sprawdz filtrowanie po kierunku, przedmiocie, semestrze, typie zajec, grupie posiadanej i grupie szukanej.
 4. Dodaj drugie ogloszenie z odwrotnym kierunkiem, np. `2` -> `1`. Oczekiwany rezultat: `409` z `conflicting_listing_id`.
 5. Sprobuj utworzyc ogloszenie z taka sama grupa w `group_have` i `group_want`. Oczekiwany rezultat: walidacja `422`.
-6. Sprobuj utworzyc ogloszenie bez Bearera. Oczekiwany rezultat: `401`.
+6. Sprobuj utworzyc ogloszenie bez sesji. Oczekiwany rezultat: `401` przy prawidlowym tokenie CSRF.
 7. W panelu `Moje wymiany` sprawdz, ze ogloszenie jest widoczne w `Moje ogloszenia`.
 
 ### E. Zgloszenie wymiany
@@ -449,7 +460,7 @@ W lokalnej bazie developerskiej moze istniec konto testowe B utworzone poza kode
 2. Sprawdz `GET /enums?lang=pl` i `GET /enums?lang=en`; etykiety powinny byc kompletne, w tym `cancelled`.
 3. Przy mockowanej wysylce uruchom testy automatyczne; nie wymagaja one prawdziwego Brevo.
 4. Przy realnej konfiguracji sprawdz, ze logi nie zawieraja hasel ani surowych tokenow.
-5. Sprawdz, ze reset hasla uniewaznia poprzedni Bearer.
+5. Sprawdz, ze reset hasla uniewaznia poprzednia sesje cookie.
 
 ### J. Docker
 
@@ -465,7 +476,7 @@ W lokalnej bazie developerskiej moze istniec konto testowe B utworzone poza kode
 
 Test jest zaliczony, gdy publiczna lista pokazuje tylko aktualne `active`, kontakty sa ukryte przed `confirmed`, potwierdzenie i anulowanie sa atomowe, wygasanie przywraca listing zgodnie z cooldownem, sesja dziala po odswiezeniu, reset hasla jest jednorazowy, a dane przezywaja restart Compose.
 
-Testy uzywaja osobnej bazy SQLite in-memory i mockuja wysylke Brevo. Nie wysylaja prawdziwych maili. Testowany jest m.in. reset hasla, neutralnosc odpowiedzi, uniewaznienie Bearera, rate limiting, wygasanie tokenow, logi dostaw i blokada zgloszen do `pending`.
+Testy uzywaja osobnej bazy SQLite in-memory i mockuja wysylke Brevo. Nie wysylaja prawdziwych maili. Testowane sa m.in. ciasteczka sesyjne, logout, ochrona CSRF, reset hasla, neutralnosc odpowiedzi, uniewaznienie sesji, rate limiting, wygasanie tokenow, logi dostaw i blokada zgloszen do `pending`.
 
 ## 9. Kolejnosc dalszych prac
 

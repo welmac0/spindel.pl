@@ -31,7 +31,7 @@ To aplikacja FastAPI + React/Vite do wymiany grup zajeciowych studentow PW. Stac
 
 ### Konto
 
-Rejestracja wymaga emaila w formacie `8-cyfr@pw.edu.pl`, szesciocyfrowego numeru indeksu i hasla minimum 8 znakow. Email musi zostac zweryfikowany. Link aktywacyjny wazny jest 7 dni. Resend zwraca neutralne `200` niezaleznie od istnienia i stanu konta; nowa wiadomosc jest wysylana po wygasnieciu poprzedniego linku albo po bledzie wysylki. Bearer jest wazny 7 dni.
+Rejestracja wymaga emaila w formacie `8-cyfr@pw.edu.pl`, szesciocyfrowego numeru indeksu i hasla minimum 8 znakow. Email musi zostac zweryfikowany. Link aktywacyjny wazny jest 7 dni. Resend zwraca neutralne `200` niezaleznie od istnienia i stanu konta; nowa wiadomosc jest wysylana po wygasnieciu poprzedniego linku albo po bledzie wysylki. Sesja jest wazna 7 dni i przechowywana w ciasteczku `spindel_session` z `HttpOnly`, `SameSite=Lax` oraz `Secure` na produkcji.
 
 Reset hasla:
 
@@ -40,7 +40,7 @@ Reset hasla:
 - token wazny 1 godzine i jednorazowy,
 - zmiana hasla uniewaznia auth token.
 
-Frontend zapisuje Bearer w `localStorage` pod kluczem `spindel_access_token`, odtwarza sesje po odswiezeniu i usuwa token przy wylogowaniu. Formularze obsluguja reset hasla, ustawienie hasla z tokenu URL `/reset-password?token=...` oraz resend weryfikacji.
+Frontend nie przechowuje tokenu sesji w JavaScript ani `localStorage`: przegladarka wysyla ciasteczko sesyjne automatycznie. `GET /csrf` wydaje token CSRF w czytelnym dla frontendu ciasteczku `spindel_csrf` i odpowiedzi JSON; frontend dodaje go jako `X-CSRF-Token` do kazdej metody modyfikujacej dane. Backend sprawdza zgodnosc tokenu cookie/header i odrzuca nieautoryzowany `Origin`. `POST /logout` uniewaznia sesje po stronie serwera i usuwa cookie sesyjne. Formularze obsluguja reset hasla, ustawienie hasla z tokenu URL `/reset-password?token=...` oraz resend weryfikacji.
 
 Po odczytaniu tokenu verify/reset frontend usuwa go z paska adresu przez `history.replaceState`. Login ma ograniczona dlugosc, a `group_want` ma limit 5 elementow i 2 cyfry na numer grupy.
 
@@ -52,7 +52,7 @@ Odrzucenie nie oznacza powrotu do `active`: uzytkownik, ktory odrzuca zaintereso
 
 ### Ogloszenie i wymiana
 
-Ogloszenia sa publiczne, ale tworzenie/edycja/usuwanie wymaga Bearera i wlasciciela. Jeden uzytkownik moze miec maksymalnie 8 ogloszen w statusie `active` lub `pending`. `group_have` to pojedyncza grupa, a `group_want` to lista grup w API; SQLite przechowuje ja jako posortowany tekst comma-separated. Tylko `active` jest widoczne. Zgloszenie wymaga zalogowania, nie moze byc do wlasnego ogloszenia i warunkowo przelacza `active -> pending`. Po 48 godzinach bez potwierdzenia zgloszenie wygasa, ogloszenie wraca do `active`, a wlasciciel dostaje cooldown 4 dni. Potwierdzenie zmienia zgloszenie na `confirmed` i ogloszenie na `fulfilled`. Odrzucenie oznacza `cancelled` dla zgloszenia i ogloszenia; nie dodajemy `rejected` do statusow ogloszen.
+Ogloszenia sa publiczne, ale tworzenie/edycja/usuwanie wymaga aktywnej sesji cookie i uprawnien wlasciciela. Jeden uzytkownik moze miec maksymalnie 8 ogloszen w statusie `active` lub `pending`. `group_have` to pojedyncza grupa, a `group_want` to lista grup w API; SQLite przechowuje ja jako posortowany tekst comma-separated. Tylko `active` jest widoczne. Zgloszenie wymaga zalogowania, nie moze byc do wlasnego ogloszenia i warunkowo przelacza `active -> pending`. Po 48 godzinach bez potwierdzenia zgloszenie wygasa, ogloszenie wraca do `active`, a wlasciciel dostaje cooldown 4 dni. Potwierdzenie zmienia zgloszenie na `confirmed` i ogloszenie na `fulfilled`. Odrzucenie oznacza `cancelled` dla zgloszenia i ogloszenia; nie dodajemy `rejected` do statusow ogloszen.
 
 ### Mail i awaria
 
@@ -63,7 +63,9 @@ Kazda logiczna wysylka ma `EmailDelivery`, a kazda proba `EmailDeliveryAttempt`.
 - `POST /register` - konto, neutralna odpowiedz `201`, limit `5/minute`.
 - `GET /verify?token=...` - aktywacja.
 - `POST /resend-verification` - resend, limit `3/hour`.
-- `POST /login` - Bearer, limit `10/minute`.
+- `GET /csrf` - inicjalizuje token CSRF i cookie; wymagane przed metodami modyfikujacymi dane.
+- `POST /login` - ustawia sesyjne cookie `HttpOnly`; nie zwraca surowego tokenu, limit `10/minute`.
+- `POST /logout` - uniewaznia biezaca sesje i usuwa cookie.
 - `POST /password-reset/request` - neutralny request, limit `3/hour`.
 - `POST /password-reset/confirm` - jednorazowa zmiana, limit `10/hour`.
 - `POST /listings` - chronione tworzenie.
@@ -83,11 +85,11 @@ Tworzenie ogloszenia zwraca `409` z `conflicting_listing_id`, jesli istnieje akt
 
 ## Bezpieczenstwo i ryzyka
 
-Hashowanie hasel uzywa `scrypt`. Tokeny generuje `secrets`, a tokeny resetu i weryfikacji sa przechowywane jako hashe. Rate limiting uzywa slowapi z pamiecia procesu, wiec nie jest jeszcze wystarczajacy dla wielu workerow. Przed produkcja trzeba dodac Redis/WAF, HTTPS, trusted hosts i CORS. Logi aplikacji ida na stdout i nie moga zawierac sekretow ani tokenow; systemd przechwyci je przez journald.
+Hashowanie hasel uzywa `scrypt`. Tokeny generuje `secrets`; tokeny sesji, resetu hasla i weryfikacji sa przechowywane w bazie jako hashe. Cookie sesyjne ma `HttpOnly`, `SameSite=Lax`, siedmiodniowy czas zycia oraz `Secure` wlaczone przez `SESSION_COOKIE_SECURE=true` na produkcji. Wszystkie metody `POST`, `PUT`, `PATCH` i `DELETE` wymagaja zgodnego cookie CSRF i naglowka `X-CSRF-Token`. Rate limiting uzywa slowapi z pamiecia procesu, wiec nie jest jeszcze wystarczajacy dla wielu workerow. Produkcja dziala przez HTTPS/reverse proxy; pozostaje ryzyko pojedynczego VPS oraz in-memory rate limitingu. Logi aplikacji ida na stdout i nie moga zawierac sekretow ani tokenow; systemd przechwyci je przez journald.
 
 `create_all()` nie wykonuje migracji istniejacych tabel. Zmiana modeli moze wymagac usuniecia lokalnego `database.db`; migracje sa celowo odlozone.
 
-Docker: `docker/compose.yaml` uruchamia backend na porcie 8000 i frontend przez Nginx na porcie 5175. `docker/Dockerfile.frontend` jest wieloetapowy: Node buduje `dist`, a Nginx go serwuje. `docker/nginx.conf` przekazuje `/api/...` do uslugi `backend` i obsluguje fallback SPA. SQLite jest w external volume `docker_wymiana_data`; oba serwisy maja healthcheck, a frontend zalezy od `backend` przez `service_healthy`. Nie czytaj `.env`; Compose przekazuje je przez `env_file`.
+Docker: `docker/compose.yaml` uruchamia backend na porcie 8000 i frontend przez Nginx na porcie 5175. Frontend developerski Vite jest dostepny na porcie 5173. `docker/Dockerfile.frontend` jest wieloetapowy: Node buduje `dist`, a Nginx go serwuje. `docker/nginx.conf` przekazuje `/api/...` do uslugi `backend` i obsluguje fallback SPA. SQLite jest w external volume `docker_wymiana_data`; oba serwisy maja healthcheck, a frontend zalezy od `backend` przez `service_healthy`. Nie czytaj `.env`; Compose przekazuje je przez `env_file`.
 
 Produkcja dziala na Hetzner VPS jako `docker compose -f docker/compose.prod.yaml`: frontendowy Nginx wystawia 80/443, Certbot odnawia certyfikat, backend nie ma publicznego portu, a SQLite jest w external volume `docker_wymiana_data`. Obrazy bazowe sa przypiete do wersji i digestow manifestow. Backend i frontend produkcyjny maja `read_only`, `cap_drop: ALL`, `no-new-privileges`, limity CPU/RAM oraz minimalne `tmpfs`; zapisy odbywaja sie tylko do wymaganych wolumenow. Systemd uruchamia `wymiana-zajec-healthcheck-inner.timer` co minute oraz `wymiana-zajec-backup.timer` co 6 godzin. Monitor korzysta z `/opt/wymiana-zajec/.env`, zapisuje stan w `/var/lib/wymiana-zajec-health/docker-status` i wysyla alerty Brevo. Payload alertu jest kodowany przez `python3`/`json.dumps`, wiec cudzyslowy i znaki nowej linii nie uszkadzaja JSON. Backup trafia do `/opt/wymiana-zajec/backups/`, ma checksum i `PRAGMA integrity_check`; wykonano test odtworzenia i potwierdzono retencje 14 kopii.
 
@@ -99,7 +101,7 @@ Maintenance: frontend obsluguje flage build-time `VITE_MAINTENANCE`. Na VPS usta
 python -m uv run pytest -q
 ```
 
-Obecnie jest 29 testow backendowych. Testy nie lacza sie z Brevo: wysylka jest mockowana. Przy recznym tescie uzywaj scenariusza end-to-end w `docs/WIKI.md`, sekcja 9, oraz Swaggera na `http://127.0.0.1:8000/docs`. Chronione sa listingi mutujace, requesty wymian, panel `me` i anulowanie; publiczne sa odczyty aktywnych listingow, enumy, health oraz linki verify/reset.
+Testy backendowe uzywaja osobnej bazy SQLite in-memory i mockuja wysylke Brevo. Przy recznym tescie uzywaj scenariusza end-to-end w `docs/WIKI.md`, sekcja 9, oraz Swaggera na `http://127.0.0.1:8000/docs`. Chronione sa endpointy wymagajace sesji cookie oraz wszystkie metody modyfikujace dane dodatkowo chronione CSRF; publiczne sa odczyty listingow, enumy, health i link verify/reset. Liczbe testow potwierdzaj wynikiem biezacego uruchomienia, nie utrzymuj jej recznie w tym dokumencie.
 
 ## Decyzje wdrozeniowe
 

@@ -9,6 +9,7 @@ services:
 
     environment:
       DATABASE_PATH: /app/data/database.db
+      SESSION_COOKIE_SECURE: "false"
     
     ports:
       - "8000:8000"

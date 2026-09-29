@@ -7,9 +7,8 @@ import logging
 import os
 import secrets
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from sqlalchemy import func, text
@@ -42,7 +41,6 @@ from wymiana_zajec.models import (
     UserCreate,
     UserLogin,
     UserPublic,
-    AuthToken,
     EmailDelivery,
     EmailDeliveryAttempt,
     EmailDeliveryStatus,
@@ -74,7 +72,7 @@ allowed_origins = [
     origin.strip()
     for origin in os.getenv(
         "ALLOWED_ORIGINS",
-        "http://localhost:3000,http://127.0.0.1:3000",
+        "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173",
     ).split(",")
     if origin.strip()
 ]
@@ -89,9 +87,9 @@ allowed_hosts = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Content-Type", "X-CSRF-Token"],
 )
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
 
@@ -100,7 +98,44 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 SessionDep: TypeAlias = Annotated[Session, Depends(get_session)]
-bearer = HTTPBearer(auto_error=False)
+
+SESSION_COOKIE_NAME = "spindel_session"
+CSRF_COOKIE_NAME = "spindel_csrf"
+SESSION_COOKIE_MAX_AGE = 7 * 24 * 60 * 60
+SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"
+CSRF_PROTECTED_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+@app.middleware("http")
+async def protect_state_changing_requests(request: Request, call_next):
+    if request.method in CSRF_PROTECTED_METHODS:
+        origin = request.headers.get("origin")
+        if origin:
+            forwarded_proto = request.headers.get("x-forwarded-proto")
+            request_origin = (
+                f"{forwarded_proto or request.url.scheme}://"
+                f"{request.headers.get('host', request.url.netloc)}"
+            )
+            if origin.rstrip("/") not in {
+                request_origin.rstrip("/"),
+                *allowed_origins,
+            }:
+                return JSONResponse(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    content={"detail": "Request origin is not allowed"},
+                )
+        csrf_cookie = request.cookies.get(CSRF_COOKIE_NAME)
+        csrf_header = request.headers.get("X-CSRF-Token")
+        if (
+            not csrf_cookie
+            or not csrf_header
+            or not secrets.compare_digest(csrf_cookie, csrf_header)
+        ):
+            return JSONResponse(
+                status_code=status.HTTP_403_FORBIDDEN,
+                content={"detail": "CSRF validation failed"},
+            )
+    return await call_next(request)
 
 def hash_password(password: str) -> str:
     salt = secrets.token_bytes(16)
@@ -126,14 +161,12 @@ def as_utc(value: datetime) -> datetime:
         return value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc)
 
-def get_current_user(
-    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
-    session: SessionDep,
-) -> User:
-    if credentials is None:
+def get_current_user(request: Request, session: SessionDep) -> User:
+    session_token = request.cookies.get(SESSION_COOKIE_NAME)
+    if not session_token:
         raise HTTPException(status_code=401, detail="Authentication required")
     user = session.exec(
-        select(User).where(User.auth_token_hash == token_hash(credentials.credentials))
+        select(User).where(User.auth_token_hash == token_hash(session_token))
     ).first()
     if not user or not user.auth_token_expires_at or as_utc(user.auth_token_expires_at) <= datetime.now(timezone.utc):
         raise HTTPException(status_code=401, detail="Invalid or expired token")
@@ -523,9 +556,30 @@ def resend_verification(
         )
     return generic_message
 
-@app.post("/login", response_model=AuthToken)
+@app.get("/csrf")
+def get_csrf_token(request: Request, response: Response):
+    csrf_token = request.cookies.get(CSRF_COOKIE_NAME) or secrets.token_urlsafe(32)
+    response.set_cookie(
+        key=CSRF_COOKIE_NAME,
+        value=csrf_token,
+        max_age=SESSION_COOKIE_MAX_AGE,
+        path="/",
+        secure=SESSION_COOKIE_SECURE,
+        httponly=False,
+        samesite="lax",
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return {"csrf_token": csrf_token}
+
+
+@app.post("/login")
 @limiter.limit("10/minute")
-def login_user(request: Request, user_in: UserLogin, session: SessionDep):
+def login_user(
+    request: Request,
+    response: Response,
+    user_in: UserLogin,
+    session: SessionDep,
+):
     user = session.exec(select(User).where(User.email == user_in.email)).first()
     if not user or not verify_password(user_in.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
@@ -536,7 +590,38 @@ def login_user(request: Request, user_in: UserLogin, session: SessionDep):
     user.auth_token_expires_at = datetime.now(timezone.utc) + timedelta(days=7)
     session.add(user)
     session.commit()
-    return AuthToken(access_token=access_token)
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=access_token,
+        max_age=SESSION_COOKIE_MAX_AGE,
+        path="/",
+        secure=SESSION_COOKIE_SECURE,
+        httponly=True,
+        samesite="lax",
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return {"message": "Login successful"}
+
+
+@app.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout_user(
+    response: Response,
+    session: SessionDep,
+    current_user: CurrentUserDep,
+):
+    current_user.auth_token_hash = None
+    current_user.auth_token_expires_at = None
+    session.add(current_user)
+    session.commit()
+    response.delete_cookie(
+        key=SESSION_COOKIE_NAME,
+        path="/",
+        secure=SESSION_COOKIE_SECURE,
+        httponly=True,
+        samesite="lax",
+    )
+    response.status_code = status.HTTP_204_NO_CONTENT
+    return response
 
 @app.post("/password-reset/request", status_code=status.HTTP_202_ACCEPTED)
 @limiter.limit("3/hour")
