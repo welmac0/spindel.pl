@@ -1,20 +1,20 @@
-Po zmianie kodu:
+# Po zmianie kodu:
 docker compose -f docker/compose.yaml up --build -d
 
-Po zwykłym zatrzymaniu:
+# Po zwykłym zatrzymaniu:
 docker compose down
 
-Po awarii backendu:
+# Po awarii backendu:
 docker compose restart backend
 
-Po zmianie Compose:
+# Po zmianie Compose:
 docker compose up -d
 
 docker compose ps
 docker compose -f docker/compose.yaml up --build -d
 docker images
 
-Uruchamia polecenie wewnątrz działającego kontenera backendu.
+# Uruchamia polecenie wewnątrz działającego kontenera backendu.
 docker compose exec backend sh
 sh – uruchom powłokę.
 

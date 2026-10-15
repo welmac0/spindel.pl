@@ -1,28 +1,43 @@
-# Bezpieczenstwo
+# Security design
 
-## Zabezpieczenia
+For private vulnerability reports, see [SECURITY.md](../SECURITY.md). This document describes implemented controls and limitations, not a security certification.
 
-- Hasla sa hashowane przez `hashlib.scrypt` z losowa sola.
-- Tokeny sesji, weryfikacji e-mail i resetu hasla sa generowane kryptograficznie; surowe tokeny nie sa zapisywane w bazie, przechowywane sa ich hashe.
-- Sesja przegladarki jest w cookie `spindel_session`: `HttpOnly`, `SameSite=Lax`, 7 dni; produkcja ustawia `Secure` przez `SESSION_COOKIE_SECURE=true`.
-- Metody `POST`, `PUT`, `PATCH`, `DELETE` wymagaja double-submit CSRF (`spindel_csrf` + `X-CSRF-Token`); backend waliduje rowniez `Origin`, jesli naglowek zostal wyslany.
-- Po zmianie hasla i wylogowaniu sesja jest uniewazniana w bazie.
-- Rejestracja, resend i reset hasla maja neutralne odpowiedzi, aby ograniczyc enumeracje kont.
-- Endpointy mutujace sprawdzaja wlasciciela i prawidlowy stan biznesowy.
-- Tokeny verify/reset sa usuwane z paska adresu przez frontend po odczytaniu.
-- Logi nie powinny zawierac hasel, sekretow ani surowych tokenow.
+## Application controls
 
-## Produkcyjny hardening
+- Passwords are hashed with `hashlib.scrypt` and a random salt.
+- Session, email verification, and password reset tokens are generated cryptographically; the database stores hashes rather than raw tokens.
+- Browser sessions use `spindel_session`: `HttpOnly`, `SameSite=Lax`, seven-day lifetime. Production Compose sets `SESSION_COOKIE_SECURE=true`.
+- All `POST`, `PUT`, `PATCH`, and `DELETE` requests require double-submit CSRF protection: `spindel_csrf` cookie plus `X-CSRF-Token` header. The backend also validates `Origin` when present.
+- Logout invalidates the current server-side session; a password reset revokes the user's existing sessions.
+- Registration, verification resend, and reset request responses use neutral account-existence messages. Input validation, rate limits, and delivery errors can still produce other responses.
+- Protected operations validate authentication, ownership where applicable, and business state.
+- Exchange contact details are disclosed only after confirmation.
+- Verification/reset tokens travel through email links; frontend handling removes tokens it consumes from the address bar. Do not copy links, tokens, or sensitive query strings into logs or issues.
 
-Produkcyjny Compose uruchamia backend i frontend z ograniczonymi uprawnieniami (`read_only`, `cap_drop`, `no-new-privileges`), limitami zasobow i wymaganymi wolumenami. Backend nie publikuje portu na zewnatrz. Nginx obsluguje HTTPS, przekierowanie HTTP -> HTTPS, HSTS, CSP, ochrone przed framingiem, `X-Content-Type-Options` i `Referrer-Policy`.
+## Infrastructure controls
 
-Sekrety przechowuj poza repozytorium w lokalnym `.env` na VPS; nigdy go nie odczytuj w celu diagnostyki, nie commituj ani nie wklejaj do Issue/logow. Sprawdzaj nazwy zmiennych albo stan uslugi bez ujawniania wartosci.
+The [production Compose configuration](../docker/compose.prod.yaml) sets read-only filesystems, dropped capabilities, `no-new-privileges`, resource limits, and explicit writable mounts for the application containers. The backend port is not published.
 
-## Znane ograniczenia / ryzyka
+[Nginx production configuration](../docker/nginx.prod.conf) handles HTTPS, HTTP-to-HTTPS redirects, HSTS, CSP, framing restrictions, `X-Content-Type-Options`, and `Referrer-Policy`.
 
-- Rate limiting `slowapi` jest przechowywany w pamieci procesu; nie jest wspoldzielony miedzy wieloma workerami.
-- Jedna instancja VPS oznacza pojedynczy punkt awarii.
-- SQLite nie jest docelowym magazynem dla wiekszej skali.
-- Brak migracji schematu; `create_all()` nie aktualizuje istniejacych tabel.
+Host controls must be configured independently: key-only SSH, disabled password authentication, and a firewall allowing public HTTP/HTTPS plus necessary administrative access. CORS and allowed host validation are **not** a network firewall. Restricting SSH must account for the deployment runner's access.
 
-Nie dodawaj Redisa, migracji ani architektury wieloinstancyjnej bez decyzji projektowej. Procedury ochrony bazy i deployu opisano w [Operacjach](operations.md).
+## Secrets and data
+
+- Keep runtime secrets outside Git; [.env.example](../.env.example) contains placeholders only.
+- Keep SSH deployment credentials in GitHub secrets. Production environment secrets can be gated by environment rules; a workflow referencing an environment does not itself configure approval requirements.
+- Configure default read-only Actions token permissions, external contributor workflow approvals, and deployment branch restrictions on GitHub.
+- Avoid exposing passwords, raw tokens, environment file contents, user records, database files, or backups in diagnostics, screenshots, logs, and public reports.
+- Use synthetic data for screenshots and tests. If a real credential enters Git history, revoke it; deleting the file is not sufficient.
+
+Repository settings and live host state cannot be inferred from the checked-in configuration alone.
+
+## Known limitations
+
+- Rate limiting is in memory and is not shared between processes or instances.
+- The single VPS is a host-level single point of failure.
+- SQLite and the lack of automated schema migrations require careful handling of data and schema changes.
+- Email delivery depends on an external service and has no asynchronous retry queue.
+- Application tests and health checks are not a penetration test or proof of availability.
+
+See [operations](operations.md) for backup and recovery responsibilities, and [testing](testing.md) for current checks.

@@ -1,23 +1,21 @@
-# Dokumentacja Spindel
+# Spindel documentation
 
-To jest indeks dokumentacji projektu. Zmiany w dokumentacji powinny trafiać do repozytorium razem z odpowiadającą im zmianą kodu.
+Start with the [README](../README.md) for an overview and native local setup.
 
-## Dla kogo?
+| Topic | Document |
+| --- | --- |
+| Components, exchange lifecycle, configuration, Docker development | [Architecture](architecture.md) |
+| Endpoints, authentication, validation, state transitions | [API and domain rules](api.md) |
+| Security controls and limitations | [Security design](security.md) |
+| Automated checks and manual smoke tests | [Testing](testing.md) |
+| Production deployment, backups, monitoring, recovery | [Operations](operations.md) |
+| Development and contribution workflow | [Contributing](../CONTRIBUTING.md) |
+| Private vulnerability reports | [Security policy](../SECURITY.md) |
 
-- **Chcesz uruchomic projekt?** Zacznij od [README](../README.md), potem [Architektura](architecture.md).
-- **Szukasz endpointu albo reguly biznesowej?** Przejdz do [Modelu danych i API](api.md).
-- **Zmiana dotyczy logowania, danych lub sekretow?** Przeczytaj [Bezpieczenstwo](security.md).
-- **Chcesz uruchomic testy?** Zobacz [Testowanie](testing.md).
-- **Obslugujesz produkcje/VPS?** Zobacz [Operacje i wdrazanie](operations.md) oraz szczegolowe [instrukcje operacyjne](notes-how2/).
-- **Kontynuujesz prace z agentem?** Zapoznaj sie z [kontekstem dla agenta](LLM_CONTEXT.md).
+## Sources of truth
 
-## Zrodla prawdy
+- Current tasks and priorities: [GitHub Issues](https://github.com/welmac0/spindel.pl/issues). TODO files are supplementary historical and operational checklists.
+- Exact request/response schemas: the running API's `/docs` and `/openapi.json`, together with source code and tests.
+- Deployment behavior: the checked-in workflows and infrastructure configuration. Live server configuration must be verified independently.
 
-- Biezace zadania i priorytety sa w GitHub Issues/Project; pliki TODO pozostaja backlogiem pomocniczym do czasu pelnego przeniesienia.
-- Aktualne zachowanie API powinno byc zgodne z kodem i OpenAPI (`/docs`, `/openapi.json`); strona [API](api.md) opisuje stabilny kontrakt i reguly domenowe.
-- Procedury wdrozenia/backupu sa w [Operacjach](operations.md) i dokumentach `notes-how2`.
-- Zalozenia projektu i wskazniki plikow opisuje [Architektura](architecture.md).
-
-## Zasada aktualizacji
-
-Jesli zmiana modyfikuje kontrakt API, bezpieczenstwo, testowanie, wdrozenie albo backup, zaktualizuj odpowiednia strone dokumentacji w tym samym commicie. Nie kopiuj calej dokumentacji do `LLM_CONTEXT.md`; ten plik ma zawierac tylko reguly potrzebne agentowi do bezpiecznej pracy.
+Update the relevant document alongside changes to API behavior, security, tests, deployment, or backups. Additional maintainer notes remain in [notes-how2](notes-how2/); some are in Polish and may describe a particular workstation. [Agent context](LLM_CONTEXT.md) is a separate maintainer aid, not the primary project documentation.

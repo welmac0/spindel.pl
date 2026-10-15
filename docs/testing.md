@@ -1,45 +1,64 @@
-# Testowanie
+# Testing
 
-## Testy automatyczne
+## Automated checks
 
-Backend:
+From the repository root, after [local setup](../README.md#local-development):
 
-```powershell
-python -m uv run pytest -q
+```bash
+uv run pytest -q
+bash tests/test_external_monitor.sh
 ```
 
-Testy korzystaja z osobnej bazy SQLite in-memory i mockuja wysylke Brevo; nie powinny dotykac produkcyjnej bazy ani wysylac prawdziwych e-maili.
+Backend tests use an isolated in-memory SQLite database and mock email delivery. They must not require production data or a real Brevo API key.
 
-Frontend:
+The API suite exercises authentication, session cookies, CSRF/origin checks, verification and reset tokens, listing validation, exchange transitions, expiration/cooldowns, and email delivery records. [Email service tests](../tests/test_email_service.py) cover verification URL construction and missing email configuration. [Monitor tests](../tests/test_external_monitor.sh) exercise state transitions without contacting production or sending live alerts.
 
-```powershell
+To type-check and build the frontend:
+
+```bash
 cd frontend
 npm ci
 npm run build
 ```
 
-CI uruchamia backend tests, frontend build, walidacje produkcyjnego Compose i skladnie skryptow Bash. Testy przegladarkowe Playwright nie sa obecnie skonfigurowane.
+### CI scope
 
-## Reczny smoke test
+The [CI workflow](../.github/workflows/ci.yml) runs on pushes and pull requests:
 
-Uruchom backend i frontend lokalnie (zob. [Architektura: lokalne uruchomienie](architecture.md#uruchomienie-lokalne)), nastepnie sprawdz:
+| Job | Check |
+| --- | --- |
+| Backend | Python 3.13, pytest |
+| Frontend | Node.js 26, npm clean install, TypeScript/Vite build |
+| Shell | Bash syntax and external monitor state-transition tests |
+| Compose | Production configuration validation without starting services |
 
-1. Rejestracje, link aktywacyjny i blokade logowania przed aktywacja.
-2. Logowanie, odswiezenie strony, wylogowanie, flage cookie `HttpOnly` oraz odrzucenie nieprawidlowego CSRF.
-3. Reset hasla, jednorazowosc tokenu i uniewaznienie starej sesji.
-4. Utworzenie, filtrowanie i anulowanie ogloszenia.
-5. Zgloszenie z drugiego konta, ukrycie kontaktow przed potwierdzeniem oraz potwierdzenie/odrzucenie.
-6. Mail aktywacyjny, resetu i powiadomienia o wymianie — produkcyjnie tylko na kontrolowanych kontach.
-7. Wersje mobilna, jezyki PL/EN i maintenance mode.
-8. Healthcheck oraz przetrwanie restartu kontenera przez wolumen SQLite.
+CI creates an empty environment file only to validate Compose references; it does not need production secrets, deploy the application, or verify live email delivery.
 
-Szczegolowy kontrakt zachowania endpointow jest w [Modelu danych i API](api.md); tryb maintenance w [instrukcji maintenance](notes-how2/maintenance_mode.md).
+### Gaps
 
-## Smoke test po wdrozeniu
+Browser E2E tests are not configured. A successful frontend build is not a UI interaction test; successful Compose validation is not a container startup or deployment test. The pipeline does not currently include dependency vulnerability scanning. Follow [Issues](https://github.com/welmac0/spindel.pl/issues) for planned work. No coverage percentage or live availability guarantee is claimed.
 
-- Potwierdz, ze backend i frontend Compose maja `healthy`.
-- Sprawdz `https://spindel.pl/api/health` oraz `https://spindel.pl/nginx-health`.
-- Sprawdz logi backendu i frontendu, bez kopiowania danych osobowych/sekretow do zgloszen.
-- Wykonaj krotki test logowania oraz kluczowego przeplywu, nie prowadzac destrukcyjnych operacji na danych uzytkownikow.
+## Manual smoke test
 
-Zglaszaj bledy bez hasel, tokenow, zawartosci `.env` i pelnych logow z danymi uzytkownikow.
+Use local synthetic data and accounts you control. Email-dependent flows need a valid Brevo configuration and supported university addresses; no development verification bypass is provided.
+
+1. Register, verify the email link, and confirm login is blocked before verification.
+2. Log in, refresh, and log out; inspect `HttpOnly` and check invalid CSRF is rejected.
+3. Request a password reset; verify token single use and invalidation of old sessions.
+4. Create, filter, edit, and cancel a listing.
+5. Request an exchange from a second account; confirm contact details remain hidden until confirmation. Exercise confirmation and rejection separately.
+6. Check verification, password reset, and exchange notification emails.
+7. Check mobile layout, Polish/English UI, and the maintenance page in a local build.
+8. Check health endpoints and database persistence after a container restart.
+
+Expected state transitions are documented in [API and domain rules](api.md). Tests describe intended behavior; check open issues for known defects.
+
+## After deployment
+
+- Confirm backend/frontend containers become `healthy`.
+- Check [API health](https://spindel.pl/api/health) and [Nginx health](https://spindel.pl/nginx-health).
+- Review backend/frontend/Certbot logs locally without publishing sensitive data.
+- Perform a small login and exchange-flow check with controlled accounts only.
+- Check backup and monitoring timers separately: a responding website does not prove that backups work.
+
+Never test destructive operations against real users' data. Redact personal information and secrets from bug reports; use the [private reporting policy](../SECURITY.md) for vulnerabilities.

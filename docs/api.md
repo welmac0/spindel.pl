@@ -1,74 +1,81 @@
-# Model danych i API
+# API and domain rules
 
-API jest udostepnione przez FastAPI. Lokalny Swagger: `http://127.0.0.1:8000/docs`; OpenAPI JSON: `http://127.0.0.1:8000/openapi.json`.
+FastAPI exposes interactive documentation at **http://localhost:8000/docs** and the OpenAPI schema at **http://localhost:8000/openapi.json** during native development.
 
-## Uwierzytelnianie i ochrona CSRF
+Paths below are backend paths. Through Nginx or the Vite proxy, prefix API requests with `/api`: for example, `/api/listings`. Production frontend routes `/verify` and `/reset-password` handle email links; the backend also provides direct verification and reset entry points.
 
-Sesja trwa 7 dni. `POST /login` ustawia cookie `spindel_session` z `HttpOnly`, `SameSite=Lax` oraz `Secure` na produkcji; surowy token nie jest zwracany w JSON. `POST /logout` uniewaznia sesje serwerowo i usuwa cookie.
+## Authentication and CSRF
 
-Przed operacjami modyfikujacymi klient pobiera `GET /csrf`. Odpowiedz zawiera token, a cookie `spindel_csrf` przechowuje jego kopie. Klient dodaje wartosc w naglowku `X-CSRF-Token`. Backend sprawdza cookie/header i, gdy jest obecny, `Origin`. Nieprawidlowy CSRF lub obcy origin zwraca `403`.
+A session lasts seven days. `POST /login` sets `spindel_session` with `HttpOnly`, `SameSite=Lax`, and `Secure` in production; it does not return the raw session token in JSON. Logout revokes the session server-side and removes the cookie.
 
-Wszystkie metody `POST`, `PUT`, `PATCH`, `DELETE` wymagaja tokenu CSRF — takze rejestracja, logowanie i reset hasla. Bez sesji endpoint chroniony zwraca `401`.
+Before sending a state-changing request, fetch `GET /csrf`, retain its cookie, and send the returned token in `X-CSRF-Token`. The backend compares header and cookie and validates `Origin` when present. Invalid CSRF or an untrusted origin returns `403`.
 
-## Endpointy
+All `POST`, `PUT`, `PATCH`, and `DELETE` requests require CSRF, including registration, login, and password reset. Session-protected routes return `401` without a valid session. Browser clients must retain cookies across requests; Swagger alone does not automatically perform this CSRF flow.
 
-| Metoda i sciezka | Dostep | Opis |
-|---|---|---|
-| `POST /register` | Publiczny + CSRF | Tworzy konto i wysyla link aktywacyjny. Odpowiedz `201` jest neutralna wobec duplikatu; blad wysylki moze zwrocic `503`. |
-| `GET /verify?token=...` | Publiczny | Jednorazowa aktywacja konta; token wazny 7 dni. |
-| `POST /resend-verification` | Publiczny + CSRF | Neutralna odpowiedz `200`; limit `3/hour` na IP. |
-| `GET /csrf` | Publiczny | Ustawia cookie CSRF i zwraca token. |
-| `POST /login` | Publiczny + CSRF | Logowanie konta zweryfikowanego; ustawia cookie sesyjne; limit `10/minute` na IP. |
-| `POST /logout` | Sesja + CSRF | Uniewaznia sesje, zwraca `204`. |
-| `POST /password-reset/request` | Publiczny + CSRF | Zawsze neutralny wynik `202`; limit `3/hour` na IP. |
-| `POST /password-reset/confirm` | Publiczny + CSRF | Jednorazowo zmienia haslo i uniewaznia sesje; limit `10/hour` na IP. |
-| `GET /listings` | Publiczny | Lista tylko aktywnych ogloszen; `limit` 1–100, `offset` od 0. |
-| `GET /listings/{listing_id}` | Publiczny | Szczegoly aktywnego ogloszenia; nieaktywne zwracaja `404`. |
-| `POST /listings` | Sesja + CSRF | Tworzy ogloszenie wlasciciela. Maksymalnie 8 aktywnych/oczekujacych ofert. |
-| `PATCH /listings/{listing_id}` | Sesja + CSRF + wlasciciel | Edytuje ogloszenie; statusu nie zmienia sie przez PATCH. |
-| `DELETE /listings/{listing_id}` | Sesja + CSRF + wlasciciel | Usuwa ogloszenie; `204`. |
-| `POST /listings/{listing_id}/requests` | Sesja + CSRF | Zglasza zainteresowanie aktywnym cudzym ogloszeniem. |
-| `GET /listings/{listing_id}/requests` | Sesja + wlasciciel | Zwraca zgloszenia do ogloszenia. |
-| `POST /exchange-requests/{request_id}/confirm` | Sesja + CSRF + wlasciciel | Potwierdza wymiane, ustawia ogloszenie `fulfilled`. |
-| `POST /exchange-requests/{request_id}/reject` | Sesja + CSRF + wlasciciel | Anuluje zgloszenie i ogloszenie. |
-| `POST /listings/{listing_id}/cancel` | Sesja + CSRF + wlasciciel | Anuluje aktywne lub oczekujace ogloszenie. |
-| `GET /me/exchange-requests` | Sesja | Zgloszenia wyslane i otrzymane przez uzytkownika. |
-| `GET /me/listings` | Sesja | Wszystkie ogloszenia zalogowanego uzytkownika, takze zakonczone. |
-| `GET /enums?lang=pl\|en` | Publiczny | Etykiety enumow PL/EN. |
-| `GET /stats` | Publiczny | Publiczne statystyki zakonczonych wymian. |
-| `GET /health` | Publiczny | Status aplikacji i polaczenia z SQLite; awaria bazy daje `503`. |
+## Endpoints
 
-## Reguly domenowe
+| Method and path | Access | Behavior |
+| --- | --- | --- |
+| `GET /health` | Public | Application/database health; database failure returns `503` |
+| `GET /csrf` | Public | Sets the CSRF cookie and returns the token |
+| `POST /register` | Public + CSRF | Registration and verification email; neutral `201` for duplicate accounts; delivery failure can return `503` |
+| `GET /verify?token=...` | Public | One-time account verification; token valid for seven days |
+| `POST /resend-verification` | Public + CSRF | Neutral account-existence message; limit `3/hour` per IP |
+| `POST /login` | Public + CSRF | Verified account login; session cookie; limit `10/minute` per IP |
+| `POST /logout` | Session + CSRF | Revokes session; `204` |
+| `POST /password-reset/request` | Public + CSRF | Neutral `202` for valid requests; limit `3/hour` per IP |
+| `GET /reset-password?token=...` | Public | Redirects to the frontend reset page; excluded from OpenAPI |
+| `POST /password-reset/confirm` | Public + CSRF | One-time password change and session revocation; limit `10/hour` per IP |
+| `GET /listings` | Public | Active listings; `limit` 1–100 and nonnegative `offset` |
+| `GET /listings/{listing_id}` | Public | Active listing details; inactive listings return `404` |
+| `POST /listings` | Session + CSRF | Creates a listing; at most eight active/pending listings per user |
+| `PATCH /listings/{listing_id}` | Owner session + CSRF | Updates listing fields, not status |
+| `DELETE /listings/{listing_id}` | Owner session + CSRF | Deletes a listing; `204` |
+| `POST /listings/{listing_id}/requests` | Session + CSRF | Requests an exchange on another user's active listing |
+| `GET /listings/{listing_id}/requests` | Owner session | Requests for this listing |
+| `POST /exchange-requests/{request_id}/confirm` | Listing owner session + CSRF | Confirms exchange; listing becomes `fulfilled` |
+| `POST /exchange-requests/{request_id}/reject` | Listing owner session + CSRF | Cancels the request and listing |
+| `POST /listings/{listing_id}/cancel` | Owner session + CSRF | Cancels an active or pending listing |
+| `GET /me/exchange-requests` | Session | Requests sent and received by the user |
+| `GET /me/listings` | Session | The user's listings, including completed listings |
+| `GET /enums?lang=pl` | Public | Enum labels; `pl` and `en` supported |
+| `GET /stats` | Public | Completed exchange statistics |
 
-### Konto
+Use OpenAPI for exact schemas and validation errors. Rate limits are process-local; production proxy configuration affects which client IP the application sees.
 
-- Email ma format `8-cyfr@pw.edu.pl`; numer indeksu sklada sie z 6 cyfr.
-- Haslo ma od 8 do 128 znakow.
-- Link aktywacyjny jest jednorazowy i wazny 7 dni.
-- Token resetu hasla jest jednorazowy i wazny 1 godzine.
-- Odpowiedzi rejestracji/resend/reset nie powinny ujawniac, czy konto istnieje.
+## Domain rules
 
-### Ogłoszenia
+### Accounts
 
-- `group_have` to jedna grupa, `group_want` to lista maksymalnie 5 grup; numery grup maja maksymalnie 2 cyfry.
-- Backend usuwa duplikaty i sortuje `group_want`; SQLite przechowuje liste jako tekst rozdzielony przecinkami.
-- Grupa posiadana i szukana musza byc rozne.
-- Jedno konto moze miec maksymalnie 8 ogloszen ze statusem `active` albo `pending`.
-- Tworzenie odwrotnej, konfliktowej zamiany zwraca `409` z `conflicting_listing_id`.
-- Aktywne ogloszenie starsze niz 90 dni staje sie `stale`.
+- University email format: eight digits followed by `@pw.edu.pl`; student index number: six digits.
+- Email and student index uniqueness are enforced by database constraints.
+- Password length: 8–128 characters.
+- Verification tokens are single-use and valid for seven days; reset tokens are single-use and valid for one hour.
+- Registration, resend, and reset requests use neutral messages about account existence. Validation, rate limits, or email failures may still produce errors.
 
-Statusy ogloszenia: `active`, `pending`, `fulfilled`, `stale`, `cancelled`.
+### Listings
 
-### Wymiana
+- `group_have` identifies one current group; `group_want` contains at most five desired groups.
+- Desired group numbers are positive, at most two digits, deduplicated, sorted, and stored as comma-separated text in SQLite.
+- Current and desired groups must differ.
+- A user may have at most eight `active` or `pending` listings.
+- Creating a conflicting inverse exchange returns `409` with `conflicting_listing_id`.
+- Active listings older than 90 days are marked `stale` during cleanup.
 
-- Zgloszenie jest mozliwe tylko do ogloszenia `active` i nie do wlasnej oferty.
-- Zmiana `active -> pending` jest atomowa; drugie zgloszenie nie przechodzi.
-- Zgloszenie wygasa po 48 godzinach. Wtedy ogloszenie wraca do `active`, a wlasciciel ma cooldown 4 dni.
-- Potwierdzenie ustawia zgloszenie `confirmed` i ogloszenie `fulfilled`; dopiero wtedy ujawniane sa kontakty.
-- Odrzucenie anuluje oferte: zgloszenie i ogloszenie otrzymuja `cancelled`. Nie ma statusu ogloszenia `rejected`.
+Listing states: `active`, `pending`, `fulfilled`, `stale`, `cancelled`.
 
-Statusy zgloszenia: `pending`, `confirmed`, `expired`, `cancelled`.
+### Exchanges
 
-## E-maile
+- Only another user's `active` listing can receive a request.
+- `active → pending` is atomic, so a second request cannot reserve the same listing.
+- After 48 hours, an unconfirmed request expires; cleanup returns the listing to `active` and applies a four-day cooldown to its owner.
+- Confirmation sets the request to `confirmed` and listing to `fulfilled`; only then are participant contact details exposed.
+- Rejection sets both request and listing to `cancelled`. There is no `rejected` listing state.
 
-`EmailDelivery` reprezentuje logiczna dostawe, a `EmailDeliveryAttempt` konkretna probe. Nieudany e-mail nie cofa zapisanej rejestracji ani wymiany. Wysylka wykorzystuje Brevo Transactional API.
+Request states: `pending`, `confirmed`, `expired`, `cancelled`.
+
+Cleanup runs in relevant request handlers, not a background timer. These rules describe intended behavior; see [open issues](https://github.com/welmac0/spindel.pl/issues) for known defects.
+
+## Email delivery records
+
+`EmailDelivery` describes a logical delivery and `EmailDeliveryAttempt` an individual attempt. A failed email does not roll back an already persisted registration or exchange. Delivery uses Brevo synchronously; records do not imply an automatic retry worker exists.

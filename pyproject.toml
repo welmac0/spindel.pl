@@ -1,10 +1,10 @@
 [project]
 name = "wymiana-zajec"
 version = "0.1.0"
-description = "Add your description here"
+description = "Spindel: class group exchanges for Warsaw University of Technology students"
 readme = "README.md"
 authors = [
-    { name = "Maciej Welpa", email = "mwq@kmd.dk" }
+    { name = "Maciej Welpa" }
 ]
 requires-python = ">=3.13"
 dependencies = [
@@ -22,6 +22,11 @@ dev = [
 
 [project.scripts]
 wymiana-zajec = "wymiana_zajec:main"
+
+[project.urls]
+Homepage = "https://spindel.pl"
+Repository = "https://github.com/welmac0/spindel.pl"
+Issues = "https://github.com/welmac0/spindel.pl/issues"
 
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13.0"]

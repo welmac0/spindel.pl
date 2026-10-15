@@ -1,99 +1,99 @@
-# Operacje i wdrazanie
+# Operations and deployment
 
-## Produkcja
+## Production layout
 
-Spindel dziala na pojedynczym VPS Hetzner (Ubuntu) przez Docker Compose. Produkcyjny Compose uruchamia backend, frontend/Nginx i Certbot. Nginx wystawia 80/443, backend nie ma publicznie wystawionego portu, a SQLite znajduje sie w zewnetrznym wolumenie `docker_wymiana_data`.
+Spindel runs on a single Ubuntu VPS at Hetzner. [Production Compose](../docker/compose.prod.yaml) defines the backend, frontend/Nginx, and Certbot. Nginx publishes ports 80/443; the backend has no published port. SQLite is stored in the external volume `docker_wymiana_data`.
 
-## Wdrozenie
+The existing deployment checkout is expected at `/opt/wymiana-zajec`. Paths in the scripts and service units describe this layout, not a generic installer. Provisioning a new host also requires DNS, certificates, an external database volume, secrets, host access controls, and systemd units. Do not assume a production Compose start alone provisions these prerequisites.
 
-W repozytorium istnieje reczny GitHub Actions workflow `Deploy production`: weryfikuje CI dla aktualnego `main`, laczy sie z VPS, wykonuje backup, buduje obrazy, uruchamia uslugi i czeka na healthchecki. Workflow wdraza `main`, nie konkretny tag.
+Keep runtime credentials outside Git. The repository template documents variable names, not production values. Live host and GitHub settings must be verified separately from this guide.
 
-Po wdrozeniu zweryfikuj:
+## Deployment workflow
 
-- `https://spindel.pl/api/health`
-- `https://spindel.pl/nginx-health`
-- statusy `healthy` dla backendu i frontendu,
-- logi aplikacji i Certbota,
-- systemd timery healthchecka i backupu,
-- kluczowy przeplyw aplikacji.
+The manually triggered [Deploy production workflow](../.github/workflows/deploy.yml):
 
-Nie uruchamiaj `docker compose down -v`, jesli baza ma zostac zachowana.
+1. Checks CI for the current `main` revision.
+2. Connects to the VPS with SSH using a deployment key and pinned known-hosts data.
+3. Updates the production checkout to `main`.
+4. Starts the SQLite backup service before rebuilding.
+5. Builds and starts backend/frontend containers.
+6. Waits for container health checks and checks the public API and Nginx health URLs.
 
-## Samodzielny przeplyw pracy
+Required GitHub secret names are `VPS_SSH_PRIVATE_KEY`, `VPS_KNOWN_HOSTS`, `VPS_HOST`, and `VPS_USER`. Prefer the `production` environment for deployment credentials; restrict its branches to `main` and configure approval rules where supported. The workflow's environment reference does not itself enable these settings.
 
-Repozytorium jest obecnie rozwijane przez jedna osobe. Bezposrednie commity na `main` sa akceptowanym sposobem pracy; Pull Request nie jest warunkiem. Przed wdrozeniem uruchom testy backendu i build frontendu, a nastepnie sprawdz zielone CI dla commita na `main`. Uzywaj osobnych branchy, jesli zmiana jest ryzykowna lub chcesz latwo ja odlozyc.
+The workflow deploys `main`, not an immutable release tag, and the checkout is updated after the CI lookup. Avoid concurrent changes to `main` during deployment. A tag labels a revision; it does not trigger this deployment. Record the revision actually deployed and verified.
 
-Release/tag opisuje commit; nie wykonuje deployu. Tag wersji przypinaj do commita, ktory rzeczywiscie zostal wdrozony i zweryfikowany.
+### Post-deployment checks
 
-## Backup i odtworzenie SQLite
+- Confirm backend/frontend report `healthy`.
+- Check [API health](https://spindel.pl/api/health) and [Nginx health](https://spindel.pl/nginx-health).
+- Inspect backend/frontend/Certbot logs locally without publishing secrets or user data.
+- Verify backup and monitoring timers.
+- Run a small [smoke test](testing.md#after-deployment) with controlled accounts.
 
-- systemd timer wykonuje backup co 6 godzin do `/opt/wymiana-zajec/backups/`, poza wolumenem aplikacji.
-- Backup ma checksum i jest sprawdzany przez `PRAGMA integrity_check`.
-- Retencja po stronie VPS wynosi 14 kopii.
-- Druga kopia jest pobierana poza VPS przez SSH/rsync; szczegoly sa w [instrukcji backupu na Macu](notes-how2/mac_backup.md).
-- Okresowo testuj odtworzenie kopii poza produkcyjna baza. Nie przywracaj pliku testowego do wolumenu produkcyjnego.
+Do not remove the database volume or use volume-deleting cleanup as a deployment step. A failed deployment does not trigger automatic rollback.
+
+## Backups and recovery
+
+[The backup script](../scripts/backup_sqlite.sh) is invoked by the [backup service](../deployment/systemd/wymiana-zajec-backup.service) and [timer](../deployment/systemd/wymiana-zajec-backup.timer).
+
+- The timer is configured to back up every six hours.
+- The default destination is `/opt/wymiana-zajec/backups/`, outside the application volume.
+- Backups use SQLite's backup mechanism and are checked with `PRAGMA integrity_check`.
+- SHA-256 checksum files accompany completed backups.
+- Default retention is the 14 most recent copies.
+
+An additional copy should be stored off-host. The existing [Mac backup notes](notes-how2/mac_backup.md) describe a workstation-specific SSH/rsync setup in Polish.
+
+Periodically restore a backup into an isolated location, verify its checksum and integrity, and test application access against that restored copy. Never point restore experiments at production storage. During a real restore, stop writers, preserve the current database, confirm file ownership and schema compatibility, then verify health and core flows before reopening access.
+
+Backup success and website availability are separate signals. The external HTTP monitor does not verify backup age or integrity; automated backup-failure alerting is separate work.
 
 ## Monitoring
 
-Systemd timer na VPS monitoruje healthcheck backendu co minute i wysyla alert przez Brevo przy zmianie stanu kontenera. Ten monitor dziala na tym samym VPS-ie, wiec nie wykryje niezawodnie awarii hosta lub utraty lacznosci z niego.
+### Container health
 
-### Niezalezny monitoring z Raspberry Pi
+Compose checks backend application/database health and frontend HTTP availability. Container health is an observation, not a complete end-to-end user journey or proof of automatic recovery.
 
-Repozytorium zawiera monitor dla Ubuntu na Raspberry Pi (lub innym stale wlaczonym hoście poza VPS-em): `scripts/check_external_health.sh`, jednostke `deployment/systemd/spindel-external-monitor.service` i timer `deployment/systemd/spindel-external-monitor.timer`. Co minute sprawdza HTTPS dla `/api/health` i `/nginx-health`; po dwoch kolejnych nieudanych sprawdzeniach wysyla alert przez Brevo. Po odzyskaniu obu endpointow wysyla wiadomosc o powrocie. Nie laczy sie z VPS-em przez SSH i nie potrzebuje otwierania portow w domowej sieci.
+### Host-side monitor
 
-#### Instalacja na Ubuntu
+[The host monitor](../scripts/check_health_inner.sh) inspects the backend container's Docker health status; it does not need a publicly exposed backend port. Its [service](../deployment/systemd/wymiana-zajec-healthcheck-inner.service) and [timer](../deployment/systemd/wymiana-zajec-healthcheck-inner.timer) run on the VPS. It sends Brevo notifications on state changes.
 
-Uruchom polecenia ponizsze na Raspberry Pi, z katalogu glownego sklonowanego repozytorium (tego, w ktorym widac `scripts/` i `deployment/`). Uzytkownik systemowy ma wlasny katalog stanu; klucz Brevo trzymany jest osobno w pliku root-owned.
+Because it shares the application's host, it cannot independently report a complete VPS or network outage.
 
-```bash
-sudo apt update
-sudo apt install --yes curl python3
-id spindel-monitor >/dev/null 2>&1 || sudo useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin spindel-monitor
-sudo install -d -o root -g spindel-monitor -m 0750 /etc/spindel-monitor
-sudo install -o root -g root -m 0755 /tmp/check_external_health.sh /usr/local/sbin/spindel-external-monitor.sh
-sudo install -o root -g root -m 0644 /tmp/spindel-external-monitor.service /etc/systemd/system/
-sudo install -o root -g root -m 0644 /tmp/spindel-external-monitor.timer /etc/systemd/system/
-sudo nano /etc/spindel-monitor/monitor.env
-```
+### External monitor
 
-W `monitor.env` wpisz **lokalnie na Raspberry Pi** (nie wklejaj sekretow do repozytorium ani rozmowy):
+[The external monitor](../scripts/check_external_health.sh) runs on a separate always-on Linux machine, such as a Raspberry Pi. It checks the public API and Nginx health endpoints over HTTPS. The default threshold is two consecutive failures; it sends an alert on failure and another when both endpoints recover. It does not need SSH access to production or inbound access to the monitor's home network.
 
-```dotenv
-BREVO_API_KEY=YOUR_BREVO_API_KEY
-BREVO_SENDER_EMAIL=verified-sender@example.com
-BREVO_SENDER_NAME="Spindel Monitor"
-ALERT_EMAIL=your-alert-address@example.com
-FAILURE_THRESHOLD=2
-```
+To install it, copy the script and the checked-in [service](../deployment/systemd/spindel-external-monitor.service) and [timer](../deployment/systemd/spindel-external-monitor.timer) to the external host. The service expects:
 
-Systemd `EnvironmentFile` obsluguje proste wartosci bez spacji i cudzyslowow; dla nazwy nadawcy zawierajacej spacje ujmij wartosc w cudzyslowy. Ustaw wlasnosc i prawa dostepu, potem uruchom monitor:
+| Item | Expected location/value |
+| --- | --- |
+| Script | `/usr/local/sbin/spindel-external-monitor.sh` |
+| Service and timer | `/etc/systemd/system/` |
+| System user/group | `spindel-monitor` |
+| Credentials file | `/etc/spindel-monitor/monitor.env` |
+| State directory | `/var/lib/spindel-external-monitor/` (managed by systemd) |
+| Dependencies | Bash, curl, Python 3 |
 
-```bash
-sudo chown root:spindel-monitor /etc/spindel-monitor/monitor.env
-sudo chmod 0640 /etc/spindel-monitor/monitor.env
-sudo systemctl daemon-reload
-sudo systemctl enable --now spindel-external-monitor.timer
-sudo systemctl start spindel-external-monitor.service
-systemctl status spindel-external-monitor.timer
-sudo journalctl -u spindel-external-monitor.service -n 30 --no-pager
-```
+Create the credentials file locally on that host with `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`, and `ALERT_EMAIL`; `FAILURE_THRESHOLD=2` is optional. Never copy real credentials into this repository. Use a root-owned file with restrictive permissions readable by the service setup, then reload systemd and enable the timer. Do not overwrite credentials when updating the script or units.
 
-Timer wykonuje probe po starcie i co minute. Dwie kolejne nieudane kontrole zmieniaja stan na `down` i wysylaja jeden alert; kolejny alert przyjdzie po powrocie obu endpointow. Stan jest w `/var/lib/spindel-external-monitor/`.
+Test alerts using a temporary monitor-local URL override to a nonexistent path rather than stopping production. Restore the correct URL and verify recovery. The script's comments list supported overrides. The automated [monitor tests](../tests/test_external_monitor.sh) validate transitions without sending real email.
 
-Przy aktualizacji skryptu lub jednostek powtorz `scp` tych samych trzech plikow, wykonaj ponownie odpowiednie komendy `sudo install`, a potem `sudo systemctl daemon-reload`; sprawdz log przez `journalctl`. Pliku `monitor.env` nie pobieraj z repo i nie nadpisuj przy aktualizacji.
-
-Testuj bez wylaczania produkcji: na chwile zmien lokalnie w `monitor.env` jeden URL na nieistniejaca sciezke w `https://spindel.pl`, wykonaj dwukrotnie `sudo systemctl start spindel-external-monitor.service`, sprawdz mail i przywroc URL. Po przywroceniu prawidlowych adresow uruchom usluge ponownie i sprawdz alert o powrocie. Nie testuj, zatrzymujac VPS w godzinach uzytkowania.
-
-Ograniczenie: Raspberry Pi, domowe zasilanie/Internet oraz lacze do Brevo staja sie elementami monitora. Gdy Pi jest wylaczone albo domowe lacze padnie, nie bedzie moglo wyslac alertu; dla monitoringu krytycznego dodaj pozniej usluge zewnetrzna hostowana niezaleznie.
-
-#### Czy monitorowac nieudany backup?
-
-Tak, to oddzielny sygnal wartosciowy: witryna moze odpowiadac, mimo ze kolejne kopie bazy sie nie tworza. Obecny monitor na Raspberry sprawdza dostepnosc HTTP i nie ma bezpiecznego dostepu do prywatnego katalogu backupow na VPS-ie. Timer backupu i testy odtworzenia nadal trzeba sprawdzac. Alert o bledzie backupu warto dodac osobno, np. jako `OnFailure` do uslugi backupu lub jako zewnetrzne sprawdzanie wieku kopii; nie nalezy publicznie wystawiac katalogu ani endpointu udostepniajacego backupy.
+The external monitor depends on its own power, network, and Brevo connectivity. If it cannot reach the internet, it cannot send an alert; independent monitoring infrastructure would reduce that risk.
 
 ## Maintenance mode
 
-Frontend ma flage build-time `VITE_MAINTENANCE`. Instrukcja wlaczenia/wylaczenia jest w [maintenance mode](notes-how2/maintenance_mode.md). Maintenance nie wymaga zatrzymania backendu ani usuwania wolumenu.
+`VITE_MAINTENANCE` is a frontend build-time flag. Change it in the build environment and rebuild/recreate the frontend to show or remove the maintenance page. Restarting an unchanged frontend image does not change the flag. See the existing [maintenance notes](notes-how2/maintenance_mode.md) for the deployment-specific procedure.
+
+This hides the UI, not the API. It is not a substitute for stopping database writers during a restore or incompatible schema change.
 
 ## Rollback
 
-Przed zmiana na produkcji zachowaj informacje o wdrozonym commicie i sprawdz backup. Obecny workflow nie ma automatycznego rollbacku ani wdrazania wskazanego taga. W razie awarii zatrzymaj dalsze proby wdrozen, wlacz maintenance w razie potrzeby, przywroc znany dobry kod/obrazy bez usuwania wolumenu, uruchom healthchecki i smoke test. Odtwarzanie bazy jest osobna procedura — nie cofaj obrazu i bazy automatycznie razem bez oceny zgodnosci schematu.
+Keep the last verified revision/image and a valid pre-deployment backup available. The current workflow has no automatic rollback or tag-selecting deploy option.
+
+If a deployment fails, stop further deployments, use maintenance mode where helpful, restore known-good code/images without deleting the volume, and verify health plus a smoke test. Assess database compatibility separately before restoring data: rolling back code must not automatically overwrite the database or discard new user changes.
+
+## Development workflow
+
+Solo maintainer commits directly to `main` are supported; branches and pull requests are useful for risky changes and external contributions. Run relevant tests and ensure CI succeeds before deployment. Keep environment approvals, branch rules, and SSH/firewall access consistent with this workflow. See [contributing](../CONTRIBUTING.md) and [security](security.md).
