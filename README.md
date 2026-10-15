@@ -6,6 +6,8 @@ Spindel helps Warsaw University of Technology students find someone to exchange 
 
 **Live application:** [spindel.pl](https://spindel.pl) · **Status:** beta · **Interface:** Polish and English
 
+![Spindel application interface](docs/screenshot.png)
+
 ## Features
 
 - University email verification, cookie-based sessions, and password reset.
